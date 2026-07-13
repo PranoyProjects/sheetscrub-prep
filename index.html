@@ -6,6 +6,21 @@
 <title>SheetScrub — Data Studio</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=Inter:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script>
+/* Runs before first paint: prevents welcome-page flash, light-mode flash, and white reload flash */
+try{
+  var _dark=false;
+  if(localStorage.getItem('sheetscrub_user'))document.documentElement.classList.add('authed');
+  var _s=JSON.parse(localStorage.getItem('sheetscrub_session')||'{}');
+  if(_s.dark){_dark=true;document.documentElement.setAttribute('data-mode','dark')}
+  /* Root background = app background, so the browser's reload repaint is invisible */
+  document.documentElement.style.background=_dark?'#0f1520':'#f7f9fb';
+}catch(e){document.documentElement.style.background='#f7f9fb'}
+</script>
+<style>
+html.authed #loginPage{display:none !important}
+html.authed #app{display:block}
+</style>
 <style>
 /* ===== DESIGN TOKENS ===== */
 [data-mode="light"]{
@@ -33,7 +48,7 @@
   --shadow2:0 8px 32px rgba(0,0,0,.5);
 }
 *{box-sizing:border-box;margin:0;padding:0}
-html{scroll-behavior:smooth}
+html{scroll-behavior:smooth;background:var(--bg)}
 body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--ink);font-size:15px;line-height:1.6;transition:background .2s,color .2s}
 .mono{font-family:'IBM Plex Mono',monospace}
 .arch{font-family:'Archivo',sans-serif}
@@ -730,8 +745,9 @@ function doLogin(){
   loginAs({name:name,email:'',guest:true});
 }
 function guestLogin(){loginAs({name:'Guest',email:'',guest:true})}
-function loginAs(u){
+function loginAs(u,silent){
   S.user=u;
+  try{localStorage.setItem('sheetscrub_user',JSON.stringify(u))}catch(e){}
   $i('userName').textContent=u.name;
   $i('userAvatar').textContent=u.name.charAt(0).toUpperCase();
   $i('setName').value=u.name;
@@ -742,10 +758,11 @@ function loginAs(u){
   initIntegrations();
   initWaterReminder();
   initMagicTimes();
-  log('Welcome, '+u.name+'! Load a file or paste data to start.','ls');
-  setTimeout(tryRestoreSession, 300);
+  if(!silent)log('Welcome, '+u.name+'! Load a file or paste data to start.','ls');
+  if(silent){tryRestoreSession(true)}
+  else{setTimeout(function(){tryRestoreSession(false)}, 100)}
 }
-function doLogout(){if(confirm('Sign out?')){$i('app').style.display='none';$i('loginPage').style.display='flex';S={datasets:[],active:0,lang:'sql',currentChart:null,recipe:[],etlRuns:[],queryHistory:[],savedQueries:[],user:null};undoStack=[];redoStack=[];}}
+function doLogout(){if(confirm('Sign out? This also clears your saved session on this device.')){try{localStorage.removeItem('sheetscrub_user');localStorage.removeItem(SS_KEY)}catch(e){}document.documentElement.classList.remove('authed');$i('app').style.display='none';$i('loginPage').style.display='flex';S={datasets:[],active:0,lang:'sql',currentChart:null,recipe:[],etlRuns:[],queryHistory:[],savedQueries:[],user:null};undoStack=[];redoStack=[];}}
 function saveProfile(){S.user.name=$i('setName').value.trim()||S.user.name;S.user.email=$i('setEmail').value.trim();$i('userName').textContent=S.user.name;$i('userAvatar').textContent=S.user.name.charAt(0).toUpperCase();alert('Profile saved.')}
 
 /* ============================================================
@@ -771,6 +788,7 @@ function toggleCard(id){$i(id).classList.toggle('collapsed')}
 ============================================================ */
 function setMode(dark){
   document.documentElement.setAttribute('data-mode',dark?'dark':'light');
+  document.documentElement.style.background=dark?'#0f1520':'#f7f9fb';
   $i('modeBtn').textContent=dark?'☀️ Light':'🌙 Dark';
   $i('darkToggle').checked=dark;
   if(S.currentChart){drawChart()}
@@ -1729,19 +1747,20 @@ var saveSession=debounce(function(){
     localStorage.setItem(SS_KEY,JSON.stringify(payload))
   }catch(e){/* quota exceeded or storage unavailable — silently skip */}
 },1500);
-function tryRestoreSession(){
+function tryRestoreSession(auto){
   try{
+    if(S.datasets.length)return; // already have data — don't double-restore
     var raw=localStorage.getItem(SS_KEY);if(!raw)return;
     var p=JSON.parse(raw);if(!p.datasets||!p.datasets.length)return;
     var age=Math.round((Date.now()-p.ts)/60000);
     var truncNote=p.datasets.some(function(d){return d.truncated})?'\n(Note: large datasets were saved as first 5,000 rows only)':'';
-    if(!confirm('Restore your last session? ('+p.datasets.length+' dataset(s), saved '+(age<60?age+' min':Math.round(age/60)+'h')+' ago)'+truncNote))return;
+    if(!auto && !confirm('Restore your last session? ('+p.datasets.length+' dataset(s), saved '+(age<60?age+' min':Math.round(age/60)+'h')+' ago)'+truncNote))return;
     p.datasets.forEach(function(d){S.datasets.push({name:d.name,fields:d.fields,rows:d.rows,filters:{},dirty:true,profile:null})});
     S.active=Math.min(p.active||0,S.datasets.length-1);
     S.recipe=p.recipe||[];S.savedQueries=p.savedQueries||[];
     if(p.dark)setMode(true);
     renderSavedQueries();refresh();
-    log('✓ Session restored — '+S.datasets.length+' dataset(s)','ls')
+    if(!auto)log('✓ Session restored — '+S.datasets.length+' dataset(s)','ls')
   }catch(e){/* corrupt or unavailable — start fresh */}
 }
 
@@ -1833,7 +1852,13 @@ function dlCode(){
    INIT
 ============================================================ */
 ncModeChange();
-// Auto-show login immediately (already visible by default)
+// Auto-login on refresh: skip welcome page if a session exists
+(function(){
+  try{
+    var raw=localStorage.getItem('sheetscrub_user');
+    if(raw){loginAs(JSON.parse(raw),true)}
+  }catch(e){/* first visit or storage unavailable — show welcome */}
+})();
 </script>
 </body>
 </html>
