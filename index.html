@@ -7,13 +7,14 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=Inter:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script>
-/* Runs before first paint: prevents welcome-page flash, light-mode flash, and white reload flash */
+/* Runs before first paint: prevents light-mode flash and white reload flash.
+   Auth state can no longer be known synchronously (it's a server check now via
+   /api/verify) so the login page briefly shows by default; the bottom-of-page
+   script swaps to the app almost immediately if the session cookie is valid. */
 try{
   var _dark=false;
-  if(localStorage.getItem('sheetscrub_authed')==='true')document.documentElement.classList.add('authed');
   var _s=JSON.parse(localStorage.getItem('sheetscrub_session')||'{}');
   if(_s.dark){_dark=true;document.documentElement.setAttribute('data-mode','dark')}
-  /* Root background = app background, so the browser's reload repaint is invisible */
   document.documentElement.style.background=_dark?'#0f1520':'#f7f9fb';
 }catch(e){document.documentElement.style.background='#f7f9fb'}
 </script>
@@ -740,28 +741,36 @@ function fmtNum(x){if(x==null||!isFinite(x))return'—';return Math.abs(x)>=1000
 function debounce(fn,ms){var t;return function(){clearTimeout(t);var a=arguments,c=this;t=setTimeout(function(){fn.apply(c,a)},ms)}}
 
 /* ============================================================
-   AUTH
+   AUTH — credential check now happens server-side (see /api/login.js, /api/verify.js,
+   /api/logout.js). No username, password, or hash lives in this file anymore; the
+   session is an HttpOnly cookie the browser can't even read via JS.
 ============================================================ */
-/* Only this exact username is accepted. Password is never stored in plaintext —
-   only its SHA-256 hash is compared against, at sign-in time, in the browser. */
-var AUTH_USERNAME = 'ExcelMatrix';
-var AUTH_PASS_HASH = 'ea7842c191ef031300fe241f65a45fb3c10de5b3039b52a7b811fc07a664f384';
-async function sha256Hex(str){
-  var buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
-  return Array.prototype.map.call(new Uint8Array(buf), function(b){return b.toString(16).padStart(2,'0');}).join('');
-}
 async function doLogin(){
   var user = $i('loginUser').value.trim();
   var pass = $i('loginPass').value;
-  var hash = await sha256Hex(pass);
-  if(user !== AUTH_USERNAME || hash !== AUTH_PASS_HASH){
+  var btn = document.querySelector('#loginPage .btn-login');
+  var origText = btn ? btn.textContent : '';
+  if(btn){ btn.disabled = true; btn.textContent = 'Signing in…'; }
+  try{
+    var res = await fetch('/api/login', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({username: user, password: pass})
+    });
+    var data = await res.json();
+    if(!res.ok || !data.ok){
+      $i('loginErr').textContent = data.error || 'Incorrect username or password.';
+      $i('loginErr').style.display = 'block';
+      return;
+    }
+    $i('loginErr').style.display = 'none';
+    loginAs({name: user, email: '', guest: false});
+  }catch(e){
+    $i('loginErr').textContent = 'Could not reach the server — try again.';
     $i('loginErr').style.display = 'block';
-    return;
+  }finally{
+    if(btn){ btn.disabled = false; btn.textContent = origText; }
   }
-  $i('loginErr').style.display = 'none';
-  try{ localStorage.setItem('sheetscrub_authed', 'true'); }catch(e){}
-  document.documentElement.classList.add('authed');
-  loginAs({name: user, email: '', guest: false});
 }
 function loginAs(u,silent){
   S.user=u;
@@ -773,6 +782,7 @@ function loginAs(u,silent){
   $i('loginPage').style.display='none';
   $i('app').style.display='block';
   $i('integWrap').style.display='block';
+  document.documentElement.classList.add('authed');
   initIntegrations();
   initWaterReminder();
   initMagicTimes();
@@ -780,7 +790,16 @@ function loginAs(u,silent){
   if(silent){tryRestoreSession(true)}
   else{setTimeout(function(){tryRestoreSession(false)}, 100)}
 }
-function doLogout(){if(confirm('Sign out? This also clears your saved session on this device.')){try{localStorage.removeItem('sheetscrub_user');localStorage.removeItem('sheetscrub_authed');localStorage.removeItem(SS_KEY)}catch(e){}document.documentElement.classList.remove('authed');$i('app').style.display='none';$i('loginPage').style.display='flex';S={datasets:[],active:0,lang:'sql',currentChart:null,recipe:[],etlRuns:[],queryHistory:[],savedQueries:[],user:null};undoStack=[];redoStack=[];}}
+function doLogout(){
+  if(!confirm('Sign out? This also clears your saved session on this device.'))return;
+  fetch('/api/logout', {method:'POST'}).catch(function(){});
+  try{localStorage.removeItem('sheetscrub_user');localStorage.removeItem(SS_KEY)}catch(e){}
+  document.documentElement.classList.remove('authed');
+  $i('app').style.display='none';
+  $i('loginPage').style.display='flex';
+  S={datasets:[],active:0,lang:'sql',currentChart:null,recipe:[],etlRuns:[],queryHistory:[],savedQueries:[],user:null};
+  undoStack=[];redoStack=[];
+}
 function saveProfile(){S.user.name=$i('setName').value.trim()||S.user.name;S.user.email=$i('setEmail').value.trim();$i('userName').textContent=S.user.name;$i('userAvatar').textContent=S.user.name.charAt(0).toUpperCase();alert('Profile saved.')}
 
 /* ============================================================
@@ -2043,14 +2062,18 @@ function dlCode(){
    INIT
 ============================================================ */
 ncModeChange();
-// Auto-login on refresh: only if this browser already passed the password check
+// Auto-login on refresh: ask the server if the session cookie is still valid.
+// The cookie itself is HttpOnly, so this JS can't read it directly — it can only ask.
 (function(){
-  try{
-    if(localStorage.getItem('sheetscrub_authed')==='true'){
-      var raw=localStorage.getItem('sheetscrub_user');
-      if(raw){loginAs(JSON.parse(raw),true)}
+  fetch('/api/verify').then(function(r){return r.json();}).then(function(data){
+    if(data && data.ok){
+      var raw = null;
+      try{ raw = localStorage.getItem('sheetscrub_user'); }catch(e){}
+      var name = data.username || (raw ? JSON.parse(raw).name : 'User');
+      loginAs({name: name, email: '', guest: false}, true);
     }
-  }catch(e){/* first visit or storage unavailable — show login */}
+    // else: leave the login page showing (its default state)
+  }).catch(function(){ /* server unreachable — show login, fail closed */ });
 })();
 </script>
 </body>
