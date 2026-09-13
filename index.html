@@ -526,7 +526,7 @@ td.null{color:var(--bad);background:var(--bad-bg);font-style:italic}
         <div class="card">
           <div class="card-head" onclick="toggleCard('rulesCard')"><h3>Custom rules — multiple conditions per column</h3><span class="toggle"></span></div>
           <div class="card-body">
-            <p style="font-size:13px;color:var(--ink3);margin-bottom:12px">Build if-this-then-that rules. Example: column <b>email</b> · where <b>contains</b> "@gmail.com" · <b>replace</b> "@gmail.com" with "@pk.com". Stack as many as you need.</p>
+            <p style="font-size:13px;color:var(--ink3);margin-bottom:12px">Build if-this-then-that rules. Example: column <b>email</b> · where <b>contains</b> "@gmail.com" · <b>replace</b> "@gmail.com" with "@company.com". Stack as many as you need.</p>
             <div id="rulesList"></div>
             <div class="row" style="margin-top:10px">
               <button class="btn btn-ghost btn-sm" onclick="addRule()">+ Add rule</button>
@@ -716,6 +716,7 @@ td.null{color:var(--bad);background:var(--bad-bg);font-style:italic}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.js"></script>
 <script>
 'use strict';
 /* ============================================================
@@ -1194,8 +1195,38 @@ function buildAlaDB(){
 function renderSqlHint(){
   if(!S.datasets.length)return;
   $i('sqlHint').innerHTML='Tables: '+S.datasets.map(function(d){return d.name}).join(', ')
-    +'<br>ℹ️ SQL runs via AlaSQL — best for SELECT / JOIN / GROUP BY / aggregations. For window functions (ROW_NUMBER, LAG) use the PySpark/Python code generator.'
+    +'<br>ℹ️ Plain SELECT / JOIN / GROUP BY run via AlaSQL. Queries with WITH / OVER() / RANK / ROW_NUMBER / DENSE_RANK / LAG / LEAD / NTILE auto-route to a real SQLite engine — full CTE + window function support.'
 }
+
+/* ---- Secondary engine: real SQLite (sql.js/WASM) for CTEs / window functions ----
+   AlaSQL has incomplete OVER()/window-function support. Any query using WITH or a
+   window function is routed here instead, where SQLite handles them correctly. */
+var sqliteReady=null;
+function needsSqlite(q){ return /\bOVER\s*\(|\bWITH\b|\bRANK\s*\(|\bROW_NUMBER\s*\(|\bDENSE_RANK\s*\(|\bLAG\s*\(|\bLEAD\s*\(|\bNTILE\s*\(/i.test(q); }
+function getSqliteReady(){
+  if(!sqliteReady) sqliteReady = initSqlJs({ locateFile:function(f){return 'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/'+f;} });
+  return sqliteReady;
+}
+async function buildSqliteDB(){
+  var SQL = await getSqliteReady();
+  var db = new SQL.Database();
+  S.datasets.forEach(function(d){
+    profileData(d);
+    var trows = typedRows(d);
+    var types = d.profile.cols.map(function(c){ return c.type==='number' ? 'REAL' : 'TEXT'; });
+    db.run('CREATE TABLE "'+d.name+'" ('+d.fields.map(function(f,i){return '"'+f+'" '+types[i];}).join(',')+');');
+    var stmt = db.prepare('INSERT INTO "'+d.name+'" VALUES ('+d.fields.map(function(){return '?';}).join(',')+')');
+    trows.forEach(function(r){ stmt.run(d.fields.map(function(f){return r[f];})); });
+    stmt.free();
+  });
+  return db;
+}
+function sqliteExecToRows(res){
+  if(!res||!res.length) return {fields:[],rows:[]};
+  var fields=res[0].columns, rows=res[0].values.map(function(v){ var o={}; fields.forEach(function(f,i){o[f]=v[i]==null?'':String(v[i]);}); return o; });
+  return {fields:fields, rows:rows};
+}
+/* --------------------------------------------------------------------------- */
 
 /* --- Language modes --- */
 var currentLang='sql';
@@ -1207,50 +1238,186 @@ function setLang(lang,btn){
   if(sql&&lang!=='sql'){$i('sqlBox').value=translateToLang(sql,lang)}
   else if(sql&&lang==='sql'){$i('sqlBox').value=sql}
 }
-function translateToLang(sql,lang){
-  // Transpile simple SELECT to PySpark / pandas Python
-  // Handles SELECT ... FROM ... WHERE ... GROUP BY ... ORDER BY ... LIMIT ...
-  var q=sql.trim();
-  var mFull=q.match(/^SELECT\s+(.*?)\s+FROM\s+(\w+)((?:\s+(?:INNER|LEFT|RIGHT|FULL\s+OUTER)?\s*JOIN\s+\w+\s+ON\s+\S+\s*=\s*\S+)*)((?:\s+WHERE\s+(?:(?!GROUP|ORDER|LIMIT).)+)?)((?:\s+GROUP\s+BY\s+(?:(?!ORDER|LIMIT).)+)?)((?:\s+ORDER\s+BY\s+(?:(?!LIMIT).)+)?)((?:\s+LIMIT\s+\d+)?)[\s;]*$/i);
-  if(!mFull)return lang==='pyspark'?'# Could not auto-translate — write PySpark directly:\n# df = spark.table("'+extractTable(q)+'")\n# df.show()':'# Could not auto-translate — write pandas directly:\n# import pandas as pd\n# df = pd.DataFrame(rows)\n# df.head()';
-  var cols=mFull[1].trim(),tbl=mFull[2].trim(),joins=mFull[3].trim(),where=mFull[4].trim().replace(/^\s*WHERE\s+/i,''),grp=mFull[5].trim().replace(/^\s*GROUP\s+BY\s+/i,''),ord=mFull[6].trim().replace(/^\s*ORDER\s+BY\s+/i,''),lim=mFull[7].trim().replace(/^\s*LIMIT\s+/i,'');
-  if(lang==='pyspark'){
-    var lines=['from pyspark.sql import SparkSession','from pyspark.sql import functions as F','','spark = SparkSession.builder.appName("SheetScrub").getOrCreate()','df = spark.table("'+tbl+'")'];
-    if(joins){joins.split(/\s+(?:INNER|LEFT|RIGHT|FULL\s+OUTER)?\s*JOIN\s+/i).slice(1).forEach(function(j){var jm=j.match(/(\w+)\s+ON\s+(\S+)\s*=\s*(\S+)/i);if(jm)lines.push('df = df.join(spark.table("'+jm[1]+'"), df["'+jm[2].split('.').pop()+'"] == spark.table("'+jm[1]+'")["'+jm[3].split('.').pop()+'"], "left")')});  }
-    if(where)lines.push('df = df.filter("'+where.replace(/"/g,"'")+'")')
-    if(grp){var aggs=cols.match(/\w+\(([^)]+)\)\s+AS\s+(\w+)/gi)||[];var gkeys=grp.split(/,/).map(function(s){return s.trim()});var aggStr=aggs.map(function(a){var am=a.match(/(\w+)\(([^)]+)\)\s+AS\s+(\w+)/i);return am?'F.'+am[1].toLowerCase()+'(F.col("'+am[2]+'"'+')).alias("'+am[3]+'")':('"'+a+'"')}).join(', ');lines.push('df = df.groupBy('+gkeys.map(function(k){return'"'+k+'"'}).join(', ')+').agg('+aggStr+')')}
-    else if(cols!=='*')lines.push('df = df.select('+cols.split(',').map(function(c){return'"'+c.trim().split(/\s+AS\s+/i)[0].trim()+'"'}).join(', ')+')');
-    if(ord){var oc=ord.split(',').map(function(o){var p=o.trim().split(/\s+/);return p[1]&&p[1].toUpperCase()==='DESC'?'F.col("'+p[0]+'").desc()':'F.col("'+p[0]+'").asc()'});lines.push('df = df.orderBy('+oc.join(', ')+')')}
-    if(lim)lines.push('df = df.limit('+lim+')')
-    lines.push('df.show()');
-    return lines.join('\n')
-  }else{ // pandas python
-    var lines2=['import pandas as pd','','# df = pd.read_csv("'+tbl+'.csv")  # load your data'];
-    if(joins){lines2.push('# Joins: merge DataFrames using pd.merge(df1, df2, on="key", how="left")')}
-    if(where)lines2.push('df = df['+convertWhereToPandas(where)+']')
-    if(grp){var gcols=grp.split(',').map(function(s){return'"'+s.trim()+'"'});var aggFns=extractAggFns(cols);lines2.push('result = df.groupby(['+gcols.join(', ')+']).agg('+aggFns+').reset_index()')}
-    else{if(cols!=='*'){lines2.push('df = df[['+cols.split(',').map(function(c){return'"'+c.trim().split(/\s+AS\s+/i)[0].trim()+'"'}).join(', ')+']]')}}
-    if(ord){var oc2=ord.split(',');lines2.push('df = df.sort_values(['+oc2.map(function(o){return'"'+o.trim().split(/\s+/)[0]+'"'}).join(', ')+'], ascending=['+oc2.map(function(o){return!/\bDESC\b/i.test(o)}).join(', ')+'])')}
-    if(lim)lines2.push('df = df.head('+lim+')');
-    lines2.push('print(df)');
-    return lines2.join('\n')
+/* Splits a string on top-level commas only — ignores commas inside (...) so
+   window function columns like "RANK() OVER (PARTITION BY a, b)" don't get
+   sliced apart. */
+function splitTopLevel(str){
+  var parts=[],depth=0,cur='';
+  for(var i=0;i<str.length;i++){
+    var ch=str[i];
+    if(ch==='(')depth++;
+    if(ch===')')depth--;
+    if(ch===','&&depth===0){parts.push(cur);cur='';}
+    else cur+=ch;
   }
+  if(cur.trim())parts.push(cur);
+  return parts.map(function(s){return s.trim();});
+}
+/* Parses one column expression, returns either a plain column/alias, or a
+   window-function descriptor: {isWindow:true, fn, arg, partitionBy, orderBy, alias} */
+function parseColExpr(expr){
+  var wm=expr.match(/^(\w+)\s*\(([^()]*)\)\s+OVER\s*\(([^()]*)\)\s*(?:AS\s+(\w+))?$/i);
+  if(wm){
+    var fn=wm[1].toUpperCase(),arg=wm[2].trim(),over=wm[3].trim(),alias=wm[4]||(fn.toLowerCase());
+    var pm=over.match(/PARTITION\s+BY\s+(.*?)(?:ORDER\s+BY|$)/i);
+    var om=over.match(/ORDER\s+BY\s+(.*)$/i);
+    var partitionBy=pm?splitTopLevel(pm[1]):[];
+    var orderBy=om?splitTopLevel(om[1]):[];
+    return {isWindow:true,fn:fn,arg:arg,partitionBy:partitionBy,orderBy:orderBy,alias:alias};
+  }
+  var am=expr.match(/^(.+?)\s+AS\s+(\w+)$/i);
+  return {isWindow:false,expr:am?am[1].trim():expr.trim(),alias:am?am[2]:null};
+}
+function pysparkWindowExpr(colInfo,winVarName){
+  var fnMap={RANK:'F.rank()',DENSE_RANK:'F.dense_rank()',ROW_NUMBER:'F.row_number()',NTILE:'F.ntile('+colInfo.arg+')'};
+  var call;
+  if(fnMap[colInfo.fn])call=fnMap[colInfo.fn];
+  else if(colInfo.fn==='LAG')call='F.lag("'+colInfo.arg+'")'+(colInfo.arg?'':'');
+  else if(colInfo.fn==='LEAD')call='F.lead("'+colInfo.arg+'")';
+  else call='F.'+colInfo.fn.toLowerCase()+'("'+colInfo.arg+'")';
+  return call+'.over('+winVarName+')';
+}
+/* Recursively translates one SELECT/FROM/WHERE/GROUP/ORDER/LIMIT block.
+   `srcVarName` lets a CTE-derived variable stand in for the FROM table. */
+function translateSelectBlock(q,lang,cteMap){
+  cteMap=cteMap||{};
+  var mFull=q.match(/^SELECT\s+([\s\S]*?)\s+FROM\s+(\w+)(?:\s+(?:AS\s+)?(\w+))?((?:\s+(?:INNER|LEFT|RIGHT|FULL\s+OUTER)?\s*JOIN\s+\w+(?:\s+(?:AS\s+)?\w+)?\s+ON\s+\S+\s*=\s*\S+)*)((?:\s+WHERE\s+(?:(?!GROUP|ORDER|LIMIT).)+)?)((?:\s+GROUP\s+BY\s+(?:(?!ORDER|LIMIT).)+)?)((?:\s+ORDER\s+BY\s+(?:(?!LIMIT).)+)?)((?:\s+LIMIT\s+\d+)?)[\s;]*$/i);
+  if(!mFull)return null;
+  var colsRaw=mFull[1].trim(),tbl=mFull[2].trim(),tblAlias=mFull[3]||null,joins=mFull[4].trim(),
+      where=mFull[5].trim().replace(/^\s*WHERE\s+/i,''),
+      grp=mFull[6].trim().replace(/^\s*GROUP\s+BY\s+/i,''),
+      ord=mFull[7].trim().replace(/^\s*ORDER\s+BY\s+/i,''),
+      lim=mFull[8].trim().replace(/^\s*LIMIT\s+/i,'');
+  // Strip table-alias prefixes ("e.column" -> "column") everywhere — SQL aliases
+  // exist to disambiguate joined tables, but the generated df/pandas code below
+  // works off a single flattened frame after the join, same as real PySpark joins do.
+  var stripAlias=function(s){return s.replace(/\b\w+\.(\w+)\b/g,'$1');};
+  colsRaw=stripAlias(colsRaw); where=stripAlias(where); grp=stripAlias(grp); ord=stripAlias(ord);
+  var cols=splitTopLevel(colsRaw).map(parseColExpr);
+  var isCte=cteMap.hasOwnProperty(tbl);
+  if(lang==='pyspark'){
+    var lines=[];
+    if(!isCte)lines.push('df = spark.table("'+tbl+'")');
+    else lines.push('df = '+cteMap[tbl]+'  # from CTE "'+tbl+'"');
+    if(joins){joins.split(/\s*(?:INNER|LEFT|RIGHT|FULL\s+OUTER)?\s*JOIN\s+/i).slice(1).forEach(function(j){var jm=j.match(/(\w+)(?:\s+(?:AS\s+)?\w+)?\s+ON\s+(\S+)\s*=\s*(\S+)/i);if(jm){var jTbl=cteMap.hasOwnProperty(jm[1])?cteMap[jm[1]]:'spark.table("'+jm[1]+'")';lines.push('df = df.join('+jTbl+', df["'+jm[2].split('.').pop()+'"] == '+jTbl+'["'+jm[3].split('.').pop()+'"], "left")');}});}
+    if(where)lines.push('df = df.filter("'+where.replace(/"/g,"'")+'")');
+    // window columns
+    var winCount=0,winVarFor={};
+    cols.forEach(function(c){
+      if(!c.isWindow)return;
+      var key=JSON.stringify([c.partitionBy,c.orderBy]);
+      if(!winVarFor[key]){
+        winCount++;var wv='w'+winCount;winVarFor[key]=wv;
+        var wparts=[];
+        if(c.partitionBy.length)wparts.push('partitionBy('+c.partitionBy.map(function(p){return'"'+p+'"';}).join(', ')+')');
+        if(c.orderBy.length){var oc=c.orderBy.map(function(o){var p=o.split(/\s+/);return p[1]&&/desc/i.test(p[1])?'F.desc("'+p[0]+'")':'F.asc("'+p[0]+'")';});wparts.push('orderBy('+oc.join(', ')+')');}
+        lines.push(wv+' = Window.'+wparts.join('.'));
+      }
+      lines.push('df = df.withColumn("'+c.alias+'", '+pysparkWindowExpr(c,winVarFor[key])+')');
+    });
+    var nonWinAggCols=cols.filter(function(c){return!c.isWindow;});
+    if(grp){
+      var aggs=nonWinAggCols.filter(function(c){return/\w+\s*\(/.test(c.expr);});
+      var gkeys=splitTopLevel(grp);
+      var aggStr=aggs.map(function(c){var am=c.expr.match(/(\w+)\(([^)]+)\)/i);return am?'F.'+am[1].toLowerCase()+'("'+am[2]+'").alias("'+(c.alias||am[1].toLowerCase()+'_'+am[2])+'")':'"'+c.expr+'"';}).join(', ');
+      lines.push('df = df.groupBy('+gkeys.map(function(k){return'"'+k+'"';}).join(', ')+').agg('+aggStr+')');
+    }else if(!(colsRaw.trim()==='*')&&!cols.some(function(c){return c.isWindow;})){
+      lines.push('df = df.select('+nonWinAggCols.map(function(c){return'"'+c.expr+'"';}).join(', ')+')');
+    }else if(cols.some(function(c){return c.isWindow;})&&nonWinAggCols.length){
+      lines.push('df = df.select('+cols.map(function(c){return c.isWindow?'"'+c.alias+'"':'"'+c.expr+'"';}).join(', ')+')');
+    }
+    if(ord){var ocs=splitTopLevel(ord).map(function(o){var p=o.split(/\s+/);return p[1]&&/desc/i.test(p[1])?'F.col("'+p[0]+'").desc()':'F.col("'+p[0]+'").asc()';});lines.push('df = df.orderBy('+ocs.join(', ')+')');}
+    if(lim)lines.push('df = df.limit('+lim+')');
+    return lines;
+  }else{
+    var lines2=[];
+    lines2.push(isCte?'df = '+cteMap[tbl]+'.copy()  # from CTE "'+tbl+'"':'# df = pd.read_csv("'+tbl+'.csv")  # load your data');
+    if(joins)lines2.push('# Joins: merge DataFrames using pd.merge(df1, df2, on="key", how="left")');
+    if(where)lines2.push('df = df['+convertWhereToPandas(where)+']');
+    var winCount2=0,winSeen={};
+    cols.forEach(function(c){
+      if(!c.isWindow)return;
+      var grpBy=c.partitionBy.length?'.groupby(['+c.partitionBy.map(function(p){return'"'+p+'"';}).join(', ')+'])':'';
+      var sortNote=c.orderBy.length?' (sort_values by '+c.orderBy.join(', ')+' first, then apply within group)':'';
+      var fnMap={RANK:'.rank(method="min", ascending=False)',DENSE_RANK:'.rank(method="dense", ascending=False)',ROW_NUMBER:'.cumcount() + 1',LAG:'.shift(1)',LEAD:'.shift(-1)'};
+      var op=fnMap[c.fn]||('.transform("'+c.fn.toLowerCase()+'")');
+      lines2.push('df["'+c.alias+'"] = df'+grpBy+'["'+(c.arg||c.orderBy[0]||'salary')+'"]'+op+'  #'+sortNote);
+    });
+    var nonWin2=cols.filter(function(c){return!c.isWindow;});
+    if(grp){
+      var aggFns=extractAggFns(colsRaw);
+      var gcols=splitTopLevel(grp).map(function(s){return'"'+s+'"';});
+      lines2.push('result = df.groupby(['+gcols.join(', ')+']).agg('+aggFns+').reset_index()');
+    }else if(colsRaw.trim()!=='*'&&!cols.some(function(c){return c.isWindow;})){
+      lines2.push('df = df[['+nonWin2.map(function(c){return'"'+c.expr+'"';}).join(', ')+']]');
+    }
+    if(ord){var oc2=splitTopLevel(ord);lines2.push('df = df.sort_values(['+oc2.map(function(o){return'"'+o.split(/\s+/)[0]+'"';}).join(', ')+'], ascending=['+oc2.map(function(o){return!/\bDESC\b/i.test(o);}).join(', ')+'])');}
+    if(lim)lines2.push('df = df.head('+lim+')');
+    return lines2;
+  }
+}
+function translateToLang(sql,lang){
+  var q=sql.trim().replace(/;\s*$/,'');
+  var header,footer;
+  if(lang==='pyspark'){header=['from pyspark.sql import SparkSession','from pyspark.sql.window import Window','from pyspark.sql import functions as F','','spark = SparkSession.builder.appName("SheetScrub").getOrCreate()'];footer=['df.show()'];}
+  else{header=['import pandas as pd'];footer=['print(df)'];}
+
+  // Single-level CTE: WITH name AS ( subquery ) mainQuery
+  var wm=q.match(/^WITH\s+(\w+)\s+AS\s*\(/i);
+  if(wm){
+    var cteName=wm[1],start=wm[0].length,depth=1,i=start;
+    while(i<q.length&&depth>0){if(q[i]==='(')depth++;if(q[i]===')')depth--;i++;}
+    var cteBody=q.slice(start,i-1).trim();
+    var mainQuery=q.slice(i).trim();
+    var cteLines=translateSelectBlock(cteBody,lang,{});
+    if(!cteLines)return fallback(lang,q);
+    // Rename the CTE block's "df" variable to the CTE's own name so the main
+    // query can reference it directly, matching how the SQL reads.
+    var cteOut=cteLines.map(function(l){return l.replace(/^df(\s*=)/,cteName+'$1').replace(/\bdf\b/g,cteName);});
+    var cteMap={}; cteMap[cteName]=cteName;
+    var mainLines=translateSelectBlock(mainQuery,lang,cteMap);
+    if(!mainLines)return fallback(lang,q);
+    var comment=lang==='pyspark'?'# --- CTE "'+cteName+'" ---':'# --- CTE "'+cteName+'" ---';
+    var comment2=lang==='pyspark'?'# --- main query ---':'# --- main query ---';
+    return header.concat(['',comment]).concat(cteOut).concat(['',comment2]).concat(mainLines).concat(['',footer[0]]).join('\n');
+  }
+
+  var lines=translateSelectBlock(q,lang,{});
+  if(!lines)return fallback(lang,q);
+  return header.concat(lines).concat(footer).join('\n');
+}
+function fallback(lang,q){
+  return lang==='pyspark'
+    ?'# Could not auto-translate this query structure — write PySpark directly:\n# df = spark.table("'+extractTable(q)+'")\n# df.show()\n#\n# (Multi-level CTEs and some advanced clauses aren\'t auto-translated yet —\n#  single-level WITH + window functions + joins/where/group/order/limit are supported.)'
+    :'# Could not auto-translate this query structure — write pandas directly:\n# import pandas as pd\n# df = pd.read_csv("'+extractTable(q)+'.csv")\n# df.head()';
 }
 function extractTable(q){var m=q.match(/FROM\s+(\w+)/i);return m?m[1]:'table'}
 function convertWhereToPandas(w){return'('+w.replace(/(\w+)\s*=\s*'([^']+)'/g,'df["$1"] == "$2"').replace(/(\w+)\s*>\s*(\d+)/g,'df["$1"] > $2').replace(/(\w+)\s*<\s*(\d+)/g,'df["$1"] < $2').replace(/\bAND\b/gi,'&').replace(/\bOR\b/gi,'|')+')'}
 function extractAggFns(cols){var fns={};var m;var re=/(\w+)\(([^)]+)\)\s+AS\s+(\w+)/gi;while((m=re.exec(cols))!==null){var fn=m[1].toLowerCase(),col=m[2].trim(),alias=m[3];fns[alias]='("'+col+'","'+fn+'")'}return Object.keys(fns).length?JSON.stringify(fns).replace(/"/g,"'"):'"count"'}
 
-function runQuery(){
+
+async function runQuery(){
   var q=$i('sqlBox').value.trim();if(!q){alert('Write a query first.');return}
   if(currentLang!=='sql'){alert('Switch to SQL mode to run queries directly. PySpark/Python code is shown for reference — run it in your local environment.');return}
   addToHistory(q);
-  try{var db=buildAlaDB();var res=db.exec(q);
-    if(!Array.isArray(res))throw new Error('No rows returned. Use a SELECT query.');
-    if(!res.length)throw new Error('Query returned 0 rows.');
-    var fields=[];res.slice(0,200).forEach(function(o){Object.keys(o).forEach(function(k){if(fields.indexOf(k)===-1)fields.push(k)})});
-    var rows=res.map(function(o){var r={};fields.forEach(function(f){var v=o[f];r[f]=v==null?'':String(v)});return r});
+  try{
+    var fields,rows;
+    if(needsSqlite(q)){
+      log('Routing to SQLite engine (CTE/window function detected)…','lq');
+      var sdb=await buildSqliteDB();
+      var sres=sdb.exec(q);
+      var out=sqliteExecToRows(sres);
+      if(!out.rows.length)throw new Error('Query returned 0 rows.');
+      fields=out.fields;rows=out.rows;
+    }else{
+      var db=buildAlaDB();var res=db.exec(q);
+      if(!Array.isArray(res))throw new Error('No rows returned. Use a SELECT query.');
+      if(!res.length)throw new Error('Query returned 0 rows.');
+      fields=[];res.slice(0,200).forEach(function(o){Object.keys(o).forEach(function(k){if(fields.indexOf(k)===-1)fields.push(k)})});
+      rows=res.map(function(o){var r={};fields.forEach(function(f){var v=o[f];r[f]=v==null?'':String(v)});return r});
+    }
     addDataset('query_result',fields,rows);
-    log('✓ Query: '+res.length.toLocaleString()+' rows → new tab "'+ds().name+'"','ls')
+    log('✓ Query: '+rows.length.toLocaleString()+' rows → new tab "'+ds().name+'"','ls')
   }catch(e){alert('SQL error: '+(e.message||e));log('SQL error: '+(e.message||e),'le')}
 }
 function transpileQuery(){
@@ -1406,7 +1573,7 @@ function importRecipe(input){
           if(step.op==='addColumn')return addColumnFromRecipe(step);
           if(step.op==='keepFiltered')return; // skip — filter state isn't stored
           if(step.op==='customRule'&&step.rule){var r=step.rule;var d2=ds();if(d2.fields.indexOf(r.col)!==-1){histMod('recipe rule');d2.rows.forEach(function(row){if(ruleMatches(r,row[r.col]))row[r.col]=ruleApply(r,row[r.col])});d2.dirty=true;refresh()}return}
-          if(step.op==='sqlDml'&&step.q){try{runSqlStatement(step.q)}catch(e){errors.push(step.label+': '+e.message)}return}
+          if(step.op==='sqlDml'&&step.q){return runSqlStatement(step.q).catch(function(e){errors.push(step.label+': '+e.message)})}
           if(step.field)return applyTransform(step.field,step.op,step.p1||'',step.p2||'').catch(function(e){errors.push(step.label+': '+e.message)});
         })
       });
@@ -1550,7 +1717,7 @@ function parseCmd(s){
     if((m=s.match(/^remove\s+(.+?)\s+((?:>=|<=|!=|=|>|<|contains|is null).*)$/i))){f=findField(m[1]);if(!f)throw new Error('No column "'+m[1]+'"');done(applyTransform(f,'filterDrop',m[2]));return}
     // Full SQL statements: DQL/DML/DDL/DCL/TCL
     if(/^\s*(SELECT|WITH|INSERT|UPDATE|DELETE|CREATE|ALTER|DROP|TRUNCATE|GRANT|REVOKE|COMMIT|ROLLBACK|SAVEPOINT)\b/i.test(s)){
-      try{log(runSqlStatement(s),'ls')}catch(e){log('SQL: '+(e.message||e),'le')}
+      runSqlStatement(s).then(function(msg){log(msg,'ls')}).catch(function(e){log('SQL: '+(e.message||e),'le')})
       return
     }
     throw new Error('Didn\'t understand that. Type "help" for all commands.')
@@ -1767,7 +1934,7 @@ function tryRestoreSession(auto){
 /* ============================================================
    DDL / DML / DQL via CHAT (+ DCL/TCL explainers)
 ============================================================ */
-function runSqlStatement(q){
+async function runSqlStatement(q){
   var d;
   var kind=(q.match(/^\s*(SELECT|WITH|INSERT|UPDATE|DELETE|CREATE|ALTER|DROP|TRUNCATE|GRANT|REVOKE|COMMIT|ROLLBACK|SAVEPOINT)/i)||[])[1];
   if(!kind)throw new Error('Not a recognized SQL statement.');
@@ -1777,12 +1944,19 @@ function runSqlStatement(q){
   if(kind==='COMMIT'||kind==='ROLLBACK'||kind==='SAVEPOINT')
     return 'TCL ('+kind+') — no transactions in-browser. Use Undo (Ctrl+Z) as your ROLLBACK and the Recipe page as your transaction log.';
   if(kind==='SELECT'||kind==='WITH'){
-    var db=buildAlaDB();var res=db.exec(q);
-    if(!Array.isArray(res)||!res.length)throw new Error('Query returned 0 rows.');
-    var fields=[];res.slice(0,200).forEach(function(o){Object.keys(o).forEach(function(k){if(fields.indexOf(k)===-1)fields.push(k)})});
-    var rows=res.map(function(o){var r={};fields.forEach(function(f){var v=o[f];r[f]=v==null?'':String(v)});return r});
+    var fields,rows;
+    if(needsSqlite(q)){
+      var sdb=await buildSqliteDB();var sres=sdb.exec(q);var out=sqliteExecToRows(sres);
+      if(!out.rows.length)throw new Error('Query returned 0 rows.');
+      fields=out.fields;rows=out.rows;
+    }else{
+      var db=buildAlaDB();var res=db.exec(q);
+      if(!Array.isArray(res)||!res.length)throw new Error('Query returned 0 rows.');
+      fields=[];res.slice(0,200).forEach(function(o){Object.keys(o).forEach(function(k){if(fields.indexOf(k)===-1)fields.push(k)})});
+      rows=res.map(function(o){var r={};fields.forEach(function(f){var v=o[f];r[f]=v==null?'':String(v)});return r});
+    }
     addDataset('query_result',fields,rows);
-    return '✓ SELECT: '+res.length.toLocaleString()+' rows → new tab';
+    return '✓ SELECT: '+rows.length.toLocaleString()+' rows → new tab';
   }
   if(kind==='CREATE'){
     var cm=q.match(/CREATE\s+TABLE\s+`?(\w+)`?\s*\(([^)]+)\)/i);
