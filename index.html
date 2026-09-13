@@ -10,7 +10,7 @@
 /* Runs before first paint: prevents welcome-page flash, light-mode flash, and white reload flash */
 try{
   var _dark=false;
-  if(localStorage.getItem('sheetscrub_user'))document.documentElement.classList.add('authed');
+  if(localStorage.getItem('sheetscrub_authed')==='true')document.documentElement.classList.add('authed');
   var _s=JSON.parse(localStorage.getItem('sheetscrub_session')||'{}');
   if(_s.dark){_dark=true;document.documentElement.setAttribute('data-mode','dark')}
   /* Root background = app background, so the browser's reload repaint is invisible */
@@ -318,11 +318,12 @@ td.null{color:var(--bad);background:var(--bad-bg);font-style:italic}
   <div class="login-logo">Sheet<span>Scrub</span></div>
   <div class="login-tagline">The in-browser data studio for data engineers</div>
   <div class="login-card">
-    <h2>Welcome</h2>
-    <p style="font-size:13px;color:var(--ink3);margin-bottom:16px">No account needed. Everything runs and stays on your device — we couldn't see your data even if we wanted to.</p>
-    <div class="fgroup"><label>Your name (optional, stays on this device)</label><input type="text" id="loginEmail" placeholder="Enter name" autocomplete="name"></div>
-    <button class="btn-login" onclick="doLogin()">Start →</button>
-    <div class="login-alt" style="margin-top:14px">Accounts with Google sign-in coming in Pro — for saved recipes & scheduled ETL.<br><a href="mailto:feedback.sheetscrub@gmail.com">feedback.sheetscrub@gmail.com</a></div>
+    <h2>Sign in</h2>
+    <p style="font-size:13px;color:var(--ink3);margin-bottom:16px">Private workspace. Everything runs and stays on your device — we couldn't see your data even if we wanted to.</p>
+    <div class="fgroup"><label>Username</label><input type="text" id="loginUser" placeholder="Username" autocomplete="username"></div>
+    <div class="fgroup"><label>Password</label><input type="password" id="loginPass" placeholder="Password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"></div>
+    <button class="btn-login" onclick="doLogin()">Sign in →</button>
+    <div class="msg-err" id="loginErr" style="display:none;margin-top:10px">Incorrect username or password.</div>
   </div>
   <div class="login-features">
     <span class="lfeat">🔒 100% in-browser</span>
@@ -741,11 +742,27 @@ function debounce(fn,ms){var t;return function(){clearTimeout(t);var a=arguments
 /* ============================================================
    AUTH
 ============================================================ */
-function doLogin(){
-  var name=$i('loginEmail').value.trim()||'Guest';
-  loginAs({name:name,email:'',guest:true});
+/* Only this exact username is accepted. Password is never stored in plaintext —
+   only its SHA-256 hash is compared against, at sign-in time, in the browser. */
+var AUTH_USERNAME = 'ExcelMatrix';
+var AUTH_PASS_HASH = 'ea7842c191ef031300fe241f65a45fb3c10de5b3039b52a7b811fc07a664f384';
+async function sha256Hex(str){
+  var buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return Array.prototype.map.call(new Uint8Array(buf), function(b){return b.toString(16).padStart(2,'0');}).join('');
 }
-function guestLogin(){loginAs({name:'Guest',email:'',guest:true})}
+async function doLogin(){
+  var user = $i('loginUser').value.trim();
+  var pass = $i('loginPass').value;
+  var hash = await sha256Hex(pass);
+  if(user !== AUTH_USERNAME || hash !== AUTH_PASS_HASH){
+    $i('loginErr').style.display = 'block';
+    return;
+  }
+  $i('loginErr').style.display = 'none';
+  try{ localStorage.setItem('sheetscrub_authed', 'true'); }catch(e){}
+  document.documentElement.classList.add('authed');
+  loginAs({name: user, email: '', guest: false});
+}
 function loginAs(u,silent){
   S.user=u;
   try{localStorage.setItem('sheetscrub_user',JSON.stringify(u))}catch(e){}
@@ -763,7 +780,7 @@ function loginAs(u,silent){
   if(silent){tryRestoreSession(true)}
   else{setTimeout(function(){tryRestoreSession(false)}, 100)}
 }
-function doLogout(){if(confirm('Sign out? This also clears your saved session on this device.')){try{localStorage.removeItem('sheetscrub_user');localStorage.removeItem(SS_KEY)}catch(e){}document.documentElement.classList.remove('authed');$i('app').style.display='none';$i('loginPage').style.display='flex';S={datasets:[],active:0,lang:'sql',currentChart:null,recipe:[],etlRuns:[],queryHistory:[],savedQueries:[],user:null};undoStack=[];redoStack=[];}}
+function doLogout(){if(confirm('Sign out? This also clears your saved session on this device.')){try{localStorage.removeItem('sheetscrub_user');localStorage.removeItem('sheetscrub_authed');localStorage.removeItem(SS_KEY)}catch(e){}document.documentElement.classList.remove('authed');$i('app').style.display='none';$i('loginPage').style.display='flex';S={datasets:[],active:0,lang:'sql',currentChart:null,recipe:[],etlRuns:[],queryHistory:[],savedQueries:[],user:null};undoStack=[];redoStack=[];}}
 function saveProfile(){S.user.name=$i('setName').value.trim()||S.user.name;S.user.email=$i('setEmail').value.trim();$i('userName').textContent=S.user.name;$i('userAvatar').textContent=S.user.name.charAt(0).toUpperCase();alert('Profile saved.')}
 
 /* ============================================================
@@ -2026,12 +2043,14 @@ function dlCode(){
    INIT
 ============================================================ */
 ncModeChange();
-// Auto-login on refresh: skip welcome page if a session exists
+// Auto-login on refresh: only if this browser already passed the password check
 (function(){
   try{
-    var raw=localStorage.getItem('sheetscrub_user');
-    if(raw){loginAs(JSON.parse(raw),true)}
-  }catch(e){/* first visit or storage unavailable — show welcome */}
+    if(localStorage.getItem('sheetscrub_authed')==='true'){
+      var raw=localStorage.getItem('sheetscrub_user');
+      if(raw){loginAs(JSON.parse(raw),true)}
+    }
+  }catch(e){/* first visit or storage unavailable — show login */}
 })();
 </script>
 </body>
