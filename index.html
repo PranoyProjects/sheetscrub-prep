@@ -359,6 +359,8 @@ td.null{color:var(--bad);background:var(--bad-bg);font-style:italic}
       <div class="nav-item" data-page="learn-dc" onclick="navigate('learn-dc',this)"><span class="icon">🎓</span>Data Cloud</div>
       <div class="nav-item" data-page="learn-dbx" onclick="navigate('learn-dbx',this)"><span class="icon">🎓</span>Databricks</div>
       <div class="nav-item" data-page="learn-map" onclick="navigate('learn-map',this)"><span class="icon">🗺️</span>Cross-Map</div>
+      <div class="nav-section">Practice</div>
+      <div class="nav-item" data-page="practice" onclick="navigate('practice',this)"><span class="icon">🧠</span>Quiz & Flashcards</div>
       <div class="nav-section">Account</div>
       <div class="nav-item" data-page="settings" onclick="navigate('settings',this)"><span class="icon">⚙️</span>Settings</div>
     </nav>
@@ -2194,6 +2196,31 @@ df.withColumn("rn", F.row_number().over(w)).filter("rn = 1")</pre></td></tr>
         </div>
       </div>
 
+      <!-- ===== PAGE: PRACTICE (Quiz + Flashcards) ===== -->
+      <div class="page" id="page-practice">
+        <h2 class="arch" style="font-size:22px;margin-bottom:6px">Quiz & Flashcards</h2>
+        <p style="color:var(--ink3);font-size:14px;margin-bottom:14px">Working toward 100 questions per topic, priority-ordered. SQL questions run for real against a fixed dataset and auto-check your result; PySpark/Python code runs via Pyodide and checks output; Databricks/Data Cloud/Salesforce Admin are concept questions (no runnable language) — reveal the model answer to self-check.</p>
+
+        <div class="tabs-row" id="practiceTopicTabs"></div>
+
+        <div class="card">
+          <div class="card-body">
+            <div class="row" style="justify-content:space-between;flex-wrap:wrap">
+              <div class="row">
+                <button id="practiceModeQuizBtn" class="btn btn-accent btn-sm" onclick="setPracticeMode('quiz')">📝 Quiz</button>
+                <button id="practiceModeCardBtn" class="btn btn-ghost btn-sm" onclick="setPracticeMode('flashcard')">🎴 Flashcards</button>
+              </div>
+              <div class="row" style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:var(--ink3)">
+                <span id="practiceProgress"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="practiceQuizArea"></div>
+        <div id="practiceCardArea" style="display:none"></div>
+      </div>
+
       <!-- ===== PAGE: SETTINGS ===== -->
       <div class="page" id="page-settings">
         <h2 class="arch" style="font-size:22px;margin-bottom:16px">Settings</h2>
@@ -2386,6 +2413,7 @@ function navigate(page,el){
   if(page==='recipe')renderRecipe();
   if(page==='query')renderSqlHint();
   if(page==='transform'){renderColChips();renderOpGroups();renderRules()}
+  if(page==='practice')initPractice();
 }
 function toggleCard(id){$i(id).classList.toggle('collapsed')}
 
@@ -4016,6 +4044,280 @@ function dlCode(){
   var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='sheetscrub_query.'+ext;
   document.body.appendChild(a);a.click();document.body.removeChild(a);
   log('✓ Downloaded query as .'+ext+' — commit it to git with:  git add . && git commit -m "query" && git push','ls')
+}
+
+/* ============================================================
+   PRACTICE: Quiz + Flashcards, with real answer checking where possible.
+   SQL questions run against a small fixed dataset (independent of whatever
+   the user has loaded in Datasets) so expected results stay deterministic.
+   PySpark/Python questions run via the Pyodide runtime already set up for
+   the Learn tabs. Databricks/Data Cloud/Salesforce Admin have no runnable
+   language, so those are concept questions with a model-answer reveal.
+============================================================ */
+var PRACTICE_TOPICS = [
+  {key:'sql', label:'SQL', icon:'⚡'},
+  {key:'pyspark', label:'PySpark', icon:'🔥'},
+  {key:'python', label:'Python', icon:'🐍'},
+  {key:'databricks', label:'Databricks', icon:'🧱'},
+  {key:'datacloud', label:'Data Cloud', icon:'☁️'},
+  {key:'sfadmin', label:'SF Admin', icon:'⚙️'}
+];
+
+/* Fixed quiz dataset — verified via real sqlite3 execution before being written
+   here, so every "expected" value below is ground truth, not hand-typed. */
+var PRACTICE_SQL_SEED = `
+CREATE TABLE employees(employee_id INTEGER, first_name TEXT, department_id INTEGER, salary REAL, hire_date TEXT, manager_id INTEGER);
+INSERT INTO employees VALUES
+ (1,'Steven',10,24000,'2003-06-17',NULL),
+ (2,'Neena',20,17000,'2005-09-21',1),
+ (3,'Lex',20,17000,'2001-01-13',1),
+ (4,'Alexander',30,9000,'2006-01-03',2),
+ (5,'Bruce',30,6000,'2007-05-21',2),
+ (6,'David',30,4800,'2008-06-25',4),
+ (7,'Valli',30,4800,'2009-02-05',4),
+ (8,'Diana',30,4200,'2008-02-07',4),
+ (9,'Nancy',40,7000,'2002-08-17',1),
+ (10,'Daniel',40,6500,'2003-01-09',9);
+CREATE TABLE departments(department_id INTEGER, department_name TEXT);
+INSERT INTO departments VALUES (10,'Admin'),(20,'Marketing'),(30,'Purchasing'),(40,'Finance');
+CREATE TABLE transactions(txn_id INTEGER, employee_id INTEGER, amount REAL, txn_date TEXT);
+INSERT INTO transactions VALUES
+ (1,1,438.55,'2024-01-05'),(2,1,120.00,'2024-01-12'),(3,2,324.37,'2024-01-06'),
+ (4,3,19.99,'2024-01-08'),(5,4,88.20,'2024-01-09'),(6,4,150.00,'2024-01-20');
+`;
+
+var PRACTICE_BANKS = { sql: [], pyspark: [], python: [], databricks: [], datacloud: [], sfadmin: [] };
+
+PRACTICE_BANKS.sql = [
+  {priority:1, prompt:'Select each employee\'s employee_id, department_id, and salary, keeping only the top 2 highest earners per department.', starter:'SELECT employee_id, department_id, salary\\nFROM (\\n  \\n) WHERE rn <= 2;', expectCols:['employee_id','department_id','salary'], expectRows:[[1,10,24000],[2,20,17000],[3,20,17000],[4,30,9000],[5,30,6000],[9,40,7000],[10,40,6500]], answer:'SELECT employee_id, department_id, salary FROM (\n  SELECT *, ROW_NUMBER() OVER (PARTITION BY department_id ORDER BY salary DESC) rn FROM employees\n) WHERE rn <= 2 ORDER BY department_id, salary DESC;'},
+  {priority:2, prompt:'Average salary per department, rounded to 2 decimals.', starter:'SELECT department_id, ', expectCols:['department_id','avg_sal'], expectRows:[[10,24000],[20,17000],[30,5760],[40,6750]], answer:'SELECT department_id, ROUND(AVG(salary),2) avg_sal FROM employees GROUP BY department_id ORDER BY department_id;'},
+  {priority:3, prompt:'Employees earning more than their own department\'s average salary — return employee_id and salary.', starter:'SELECT e.employee_id, e.salary\\nFROM employees e\\nJOIN (\\n  \\n) d ON e.department_id = d.department_id\\nWHERE ', expectCols:['employee_id','salary'], expectRows:[[4,9000],[5,6000],[9,7000]], answer:'SELECT e.employee_id, e.salary FROM employees e JOIN (SELECT department_id, AVG(salary) avg_sal FROM employees GROUP BY department_id) d ON e.department_id=d.department_id WHERE e.salary > d.avg_sal ORDER BY e.employee_id;'},
+  {priority:4, prompt:'Count of employees per department.', starter:'', expectCols:['department_id','cnt'], expectRows:[[10,1],[20,2],[30,5],[40,2]], answer:'SELECT department_id, COUNT(*) cnt FROM employees GROUP BY department_id ORDER BY department_id;'},
+  {priority:5, prompt:'Departments with more than one employee (HAVING).', starter:'', expectCols:['department_id','cnt'], expectRows:[[20,2],[30,5],[40,2]], answer:'SELECT department_id, COUNT(*) cnt FROM employees GROUP BY department_id HAVING COUNT(*)>1 ORDER BY department_id;'},
+  {priority:6, prompt:'Self-join: each employee\'s id, name, and their manager\'s name (NULL if no manager).', starter:'SELECT e.employee_id, e.first_name, m.first_name mgr_name\\nFROM employees e\\nLEFT JOIN employees m ON ', expectCols:['employee_id','first_name','mgr_name'], expectRows:[[1,'Steven',null],[2,'Neena','Steven'],[3,'Lex','Steven'],[4,'Alexander','Neena'],[5,'Bruce','Neena'],[6,'David','Alexander'],[7,'Valli','Alexander'],[8,'Diana','Alexander'],[9,'Nancy','Steven'],[10,'Daniel','Nancy']], answer:'SELECT e.employee_id, e.first_name, m.first_name mgr_name FROM employees e LEFT JOIN employees m ON e.manager_id=m.employee_id ORDER BY e.employee_id;'},
+  {priority:7, prompt:'Second-highest distinct salary in the company.', starter:'', expectCols:['salary'], expectRows:[[17000]], answer:'SELECT DISTINCT salary FROM employees ORDER BY salary DESC LIMIT 1 OFFSET 1;'},
+  {priority:8, prompt:'Total transaction amount per employee_id, rounded to 2 decimals.', starter:'', expectCols:['employee_id','total'], expectRows:[[1,558.55],[2,324.37],[3,19.99],[4,238.2]], answer:'SELECT employee_id, ROUND(SUM(amount),2) total FROM transactions GROUP BY employee_id ORDER BY employee_id;'},
+  {priority:9, prompt:'Join employees to departments and return the first 5 rows (employee_id, department_name), ordered by employee_id.', starter:'', expectCols:['employee_id','department_name'], expectRows:[[1,'Admin'],[2,'Marketing'],[3,'Marketing'],[4,'Purchasing'],[5,'Purchasing']], answer:'SELECT e.employee_id, d.department_name FROM employees e JOIN departments d ON e.department_id=d.department_id ORDER BY e.employee_id LIMIT 5;'},
+  {priority:10, prompt:'Find employees whose department_id has no matching row in departments (orphaned FK check). Return employee_id. (Trick: there are none in this dataset — the correct answer is an empty result.)', starter:'', expectCols:['employee_id'], expectRows:[], answer:'SELECT e.employee_id FROM employees e LEFT JOIN departments d ON e.department_id=d.department_id WHERE d.department_id IS NULL;'},
+  {priority:11, prompt:'The single highest salary in the company.', starter:'', expectCols:['max_sal'], expectRows:[[24000]], answer:'SELECT MAX(salary) max_sal FROM employees;'},
+  {priority:12, prompt:'Deduplicate: for each (department_id, salary) pair, keep only the lowest employee_id. Return employee_id, first_name.', starter:'', expectCols:['employee_id','first_name'], expectRows:[[1,'Steven'],[2,'Neena'],[4,'Alexander'],[5,'Bruce'],[6,'David'],[8,'Diana'],[9,'Nancy'],[10,'Daniel']], answer:'SELECT employee_id, first_name FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY department_id, salary ORDER BY employee_id) rn FROM employees) WHERE rn=1 ORDER BY employee_id;'},
+  {priority:13, prompt:'Employees with no manager (top of the org chart).', starter:'', expectCols:['employee_id','first_name'], expectRows:[[1,'Steven']], answer:'SELECT employee_id, first_name FROM employees WHERE manager_id IS NULL;'},
+  {priority:14, prompt:'Running total of transaction amount per employee, ordered by txn_date.', starter:'', expectCols:['txn_id','employee_id','amount','running_total'], expectRows:[[1,1,438.55,438.55],[2,1,120,558.55],[3,2,324.37,324.37],[4,3,19.99,19.99],[5,4,88.2,88.2],[6,4,150,238.2]], answer:'SELECT txn_id, employee_id, amount, SUM(amount) OVER (PARTITION BY employee_id ORDER BY txn_date) running_total FROM transactions ORDER BY employee_id, txn_date;'},
+  {priority:15, prompt:'Rank employees by salary using DENSE_RANK (ties share a rank, no gaps).', starter:'', expectCols:['employee_id','salary','rnk'], expectRows:[[1,24000,1],[2,17000,2],[3,17000,2],[4,9000,3],[9,7000,4],[10,6500,5],[5,6000,6],[6,4800,7],[7,4800,7],[8,4200,8]], answer:'SELECT employee_id, salary, DENSE_RANK() OVER (ORDER BY salary DESC) rnk FROM employees ORDER BY rnk, employee_id;'}
+];
+
+PRACTICE_BANKS.pyspark = [
+  {priority:1, type:'concept', prompt:'What does .withColumn() do, and does it mutate the original DataFrame?', answer:'Adds or replaces a column, returning a NEW DataFrame — Spark DataFrames are immutable, so the original is never changed. You must reassign: df = df.withColumn(...).'},
+  {priority:2, type:'concept', prompt:'What\'s the difference between .filter() and .where() in PySpark?', answer:'Nothing functionally — .where() is just an alias for .filter(), kept for SQL-familiarity. They accept the same string or Column-expression arguments.'},
+  {priority:3, type:'concept', prompt:'Why is .collect() dangerous on a large DataFrame?', answer:'It pulls every row from every executor back to the driver\'s memory as a local Python list — on a large dataset this can OOM the driver. Use .show(), .take(n), or write results out instead.'},
+  {priority:4, type:'concept', prompt:'What does F.broadcast() do and when should you use it?', answer:'Forces a DataFrame to be copied in full to every executor before a join, avoiding a shuffle — use it when one side of a join is small (rule of thumb: under ~10MB) so the expensive side doesn\'t need to move.'},
+  {priority:5, type:'concept', prompt:'repartition() vs coalesce() — what\'s the actual difference?', answer:'repartition() does a full shuffle and can increase OR decrease partitions, useful for fixing skew. coalesce() only decreases partitions and avoids a shuffle by merging existing ones — cheaper, but can\'t rebalance skewed data.'},
+  {priority:6, type:'concept', prompt:'What is a narrow transformation vs a wide transformation?', answer:'Narrow: each output partition depends on exactly one input partition (filter, select, map) — no shuffle needed. Wide: output depends on multiple input partitions (groupBy, join, distinct) — requires a shuffle and creates a new stage.'},
+  {priority:7, type:'concept', prompt:'Why does Spark use lazy evaluation, and what triggers actual execution?', answer:'Transformations (filter/select/withColumn/groupBy) just build up a logical plan — nothing runs yet, which lets Catalyst optimize the whole plan before execution. Actions (show/count/collect/write) trigger the actual computation.'},
+  {priority:8, type:'concept', prompt:'What\'s the risk of a Python UDF compared to a built-in pyspark.sql.functions call?', answer:'A UDF is opaque to Catalyst — it can\'t be optimized, pushed down, or vectorized, and each row round-trips through Python (or JVM↔Python serialization via py4j), which is a real performance cliff. Prefer built-in functions whenever an equivalent exists.'}
+];
+
+PRACTICE_BANKS.python = [
+  {priority:1, type:'code', prompt:'Write a function that removes duplicates from a list while preserving order, then print the result for [3,1,3,2,1,4].', starter:'def dedupe(lst):\\n    # your code\\n    pass\\n\\nprint(dedupe([3,1,3,2,1,4]))', expectOutput:'[3, 1, 2, 4]', answer:'def dedupe(lst):\n    seen = set()\n    out = []\n    for x in lst:\n        if x not in seen:\n            seen.add(x)\n            out.append(x)\n    return out\n\nprint(dedupe([3,1,3,2,1,4]))'},
+  {priority:2, type:'code', prompt:'Write a function that checks if a string is a palindrome (ignore case and spaces), then print the result for "A man a plan a canal Panama".', starter:'def is_palindrome(s):\\n    # your code\\n    pass\\n\\nprint(is_palindrome("A man a plan a canal Panama"))', expectOutput:'True', answer:'def is_palindrome(s):\n    cleaned = "".join(c.lower() for c in s if c.isalnum())\n    return cleaned == cleaned[::-1]\n\nprint(is_palindrome("A man a plan a canal Panama"))'},
+  {priority:3, type:'code', prompt:'Print the count of unique words in "the quick brown fox the fox ran" (case-insensitive).', starter:'text = "the quick brown fox the fox ran"\\n# your code\\n', expectOutput:'5', answer:'from collections import Counter\ntext = "the quick brown fox the fox ran"\nwords = text.lower().split()\nprint(len(Counter(words)))'},
+  {priority:4, type:'code', prompt:'Merge two already-sorted lists [1,3,5] and [2,4,6] into one sorted list without using sorted() or sort(), then print it.', starter:'a=[1,3,5]\\nb=[2,4,6]\\n# your code\\n', expectOutput:'[1, 2, 3, 4, 5, 6]', answer:'a=[1,3,5]\nb=[2,4,6]\ni=j=0\nout=[]\nwhile i<len(a) and j<len(b):\n    if a[i]<=b[j]: out.append(a[i]); i+=1\n    else: out.append(b[j]); j+=1\nout.extend(a[i:]); out.extend(b[j:])\nprint(out)'},
+  {priority:5, type:'concept', prompt:'@staticmethod vs @classmethod — what\'s the actual difference?', answer:'staticmethod takes no implicit first argument at all — it\'s just a regular function namespaced inside a class. classmethod takes cls as its first argument, giving it access to the class itself (useful for alternate constructors that need to work correctly with subclasses).'},
+  {priority:6, type:'concept', prompt:'Shallow copy vs deep copy — where does the difference actually bite you?', answer:'Shallow copy duplicates the outer container only — nested mutable objects (lists inside lists, etc.) are still shared references. Mutating a nested object through the shallow copy also changes the original. Deep copy recursively duplicates everything, so the two become fully independent.'},
+  {priority:7, type:'concept', prompt:'What is the GIL and what does it NOT prevent?', answer:'The Global Interpreter Lock means only one thread executes Python bytecode at a time, so threading doesn\'t speed up CPU-bound work. It does NOT prevent concurrency for I/O-bound work (threads still help there, since the GIL releases during I/O waits), and doesn\'t affect multiprocessing, which uses separate processes with their own interpreter and GIL each.'},
+  {priority:8, type:'concept', prompt:'Why does duck typing mean Python doesn\'t need formal interfaces?', answer:'Python checks whether an object has the method/attribute being called at call-time, not whether it declares a specific type or inherits from a specific interface — "if it walks like a duck and quacks like a duck." Two unrelated classes with the same method name work interchangeably in the same function.'}
+];
+
+PRACTICE_BANKS.databricks = [
+  {priority:1, type:'concept', prompt:'What\'s the actual difference between Delta schema enforcement and schema evolution?', answer:'Schema enforcement is the DEFAULT behavior — Delta rejects a write whose schema doesn\'t match the target table, protecting existing consumers. Schema evolution is opt-in via mergeSchema (add new columns) or overwriteSchema (replace schema) write options — same underlying mismatch, but explicitly allowed through.'},
+  {priority:2, type:'concept', prompt:'Bronze, Silver, Gold — what does each layer actually contain?', answer:'Bronze: raw ingested data, as-is from source. Silver: cleaned, conformed, deduplicated, joined. Gold: business-level aggregates, ready for BI/reporting tools.'},
+  {priority:3, type:'concept', prompt:'What does Z-Ordering actually do, and when does it help?', answer:'Multi-dimensional co-location of related data within Delta files, so a query filtering on a Z-ordered column can skip whole files instead of scanning them. Helps when filtering on non-partition columns that partitioning alone can\'t cover.'},
+  {priority:4, type:'concept', prompt:'Why can\'t one single MERGE statement fully implement SCD Type 2?', answer:'A true Type 2 change needs both an UPDATE (expire the old row: set is_current=false, expiry_date=now) AND an INSERT (add the new version) for the same logical record — one MERGE\'s WHEN MATCHED/WHEN NOT MATCHED can\'t cleanly do both in a single pass, so it\'s implemented as two sequential MERGE/INSERT steps.'},
+  {priority:5, type:'concept', prompt:'What is a watermark in Structured Streaming, and what happens without one on an aggregation?', answer:'A watermark tells Spark how late an event can arrive before it\'s considered too late to include, which bounds how much state must be kept for windowed aggregations. Without one, state grows unboundedly, since Spark has no way to know a window is "done" and can be evicted from memory.'},
+  {priority:6, type:'concept', prompt:'Unity Catalog\'s three-level namespace — what are the three levels?', answer:'catalog.schema.table — e.g. main.sales.orders. Catalog sits above schema (traditionally called "database"), which sits above table.'}
+];
+
+PRACTICE_BANKS.datacloud = [
+  {priority:1, type:'concept', prompt:'What\'s the difference between a DLO and a DMO?', answer:'A Data Lake Object holds raw ingested data close to its source shape. A Data Model Object maps that raw data into Data Cloud\'s canonical schema, which is what makes cross-source joining and Identity Resolution possible at all.'},
+  {priority:2, type:'concept', prompt:'What decides which value wins when two source systems disagree on a field during Identity Resolution?', answer:'A reconciliation rule — commonly "most recently updated source wins," but it can also be a fixed source-priority order or "most complete record wins," configured per field.'},
+  {priority:3, type:'concept', prompt:'Name the 3 Data Cloud objects involved in pushing a filtered audience to an ad platform, in order.', answer:'1) A Calculated Insight computing the relevant metric. 2) A Segment filtering on that Calculated Insight/DMO fields. 3) An Activation Target pointing at the ad platform.'},
+  {priority:4, type:'concept', prompt:'Is Identity Resolution real-time or batch?', answer:'Batch — a new record lands as a DLO immediately via ingestion, but isn\'t merged into a Unified Individual until the next scheduled Identity Resolution run completes.'},
+  {priority:5, type:'concept', prompt:'What\'s the difference between a Calculated Insight and a plain DMO field?', answer:'A DMO field is a direct stored attribute (e.g. Order.TotalAmount). A Calculated Insight is a computed, scheduled metric, often aggregating across many rows (e.g. "average order value, last 90 days") — Data Cloud\'s closest equivalent to a SQL aggregation query.'}
+];
+
+PRACTICE_BANKS.sfadmin = [
+  {priority:1, type:'concept', prompt:'Profile vs Permission Set — what\'s the structural difference?', answer:'Every user needs exactly one Profile (their baseline access). Permission Sets are additional, stackable grants layered on top — a user can have any number of them.'},
+  {priority:2, type:'concept', prompt:'Two users in the same Role can\'t see each other\'s records even though OWD is Private. Why doesn\'t the Role Hierarchy help here?', answer:'Role hierarchy only grants visibility UPWARD (managers see subordinates\' records), never sideways between peers at the same level. Peer visibility needs an explicit sharing rule.'},
+  {priority:3, type:'concept', prompt:'When should you use a Validation Rule instead of a Flow?', answer:'When the only need is to block a save based on a condition — Validation Rules are simpler and run synchronously at save time. Reach for Flow when you need to do something beyond blocking (update other records, send notifications, multi-step logic).'},
+  {priority:4, type:'concept', prompt:'What\'s a Permission Set Group, and how is it different from just assigning multiple Permission Sets?', answer:'It bundles multiple Permission Sets into one assignable unit — instead of assigning 5 separate sets to every new hire, assign one group. It also supports "muting" specific permissions from within the bundle, which individual Permission Sets can\'t do to each other.'},
+  {priority:5, type:'concept', prompt:'What commonly breaks after a sandbox refresh, and why?', answer:'Integrations — sandbox refreshes typically reset/regenerate API keys, Named Credentials, and Connected App settings, and can overwrite sandbox-specific config with production values. Integration credentials and OAuth tokens usually need reconfiguring post-refresh.'}
+];
+
+var practiceState = { topic:'sql', mode:'quiz', index:0, cardFlipped:false, quizSqliteDB:null };
+
+function initPractice(){
+  if(!$i('practiceTopicTabs').children.length) renderPracticeTabs();
+  renderPractice();
+}
+function renderPracticeTabs(){
+  $i('practiceTopicTabs').innerHTML = PRACTICE_TOPICS.map(function(t){
+    var count = PRACTICE_BANKS[t.key].length;
+    return '<div class="ds-tab'+(t.key===practiceState.topic?' active':'')+'" data-topic="'+t.key+'">'
+      +'<span>'+t.icon+' '+t.label+'</span><span class="rc">'+count+'</span></div>';
+  }).join('');
+  $i('practiceTopicTabs').querySelectorAll('.ds-tab').forEach(function(el){
+    el.addEventListener('click', function(){
+      practiceState.topic = el.dataset.topic;
+      practiceState.index = 0;
+      practiceState.cardFlipped = false;
+      renderPracticeTabs();
+      renderPractice();
+    });
+  });
+}
+function setPracticeMode(mode){
+  practiceState.mode = mode;
+  practiceState.index = 0;
+  practiceState.cardFlipped = false;
+  $i('practiceModeQuizBtn').className = 'btn btn-sm ' + (mode==='quiz' ? 'btn-accent' : 'btn-ghost');
+  $i('practiceModeCardBtn').className = 'btn btn-sm ' + (mode==='flashcard' ? 'btn-accent' : 'btn-ghost');
+  $i('practiceQuizArea').style.display = mode==='quiz' ? 'block' : 'none';
+  $i('practiceCardArea').style.display = mode==='flashcard' ? 'block' : 'none';
+  renderPractice();
+}
+function renderPractice(){
+  var bank = PRACTICE_BANKS[practiceState.topic];
+  $i('practiceProgress').textContent = bank.length ? ('Question '+(practiceState.index+1)+' of '+bank.length) : 'No questions yet';
+  if(practiceState.mode==='quiz') renderPracticeQuiz(); else renderPracticeFlashcard();
+}
+function practiceNav(delta){
+  var bank = PRACTICE_BANKS[practiceState.topic];
+  practiceState.index = Math.max(0, Math.min(bank.length-1, practiceState.index+delta));
+  practiceState.cardFlipped = false;
+  renderPractice();
+}
+
+/* ---- Quiz mode ---- */
+function renderPracticeQuiz(){
+  var bank = PRACTICE_BANKS[practiceState.topic];
+  var out = $i('practiceQuizArea');
+  if(!bank.length){ out.innerHTML = '<div class="card"><div class="card-body">No questions in this topic yet.</div></div>'; return; }
+  var q = bank[practiceState.index];
+  var isCode = practiceState.topic==='sql' || (q.type==='code');
+  var html = '<div class="card"><div class="card-body">';
+  html += '<div style="font-family:monospace;font-size:11px;color:var(--ink3);margin-bottom:6px">Priority #'+q.priority+'</div>';
+  html += '<p style="font-size:14px;margin-bottom:12px">'+esc(q.prompt)+'</p>';
+  if(isCode){
+    var starter = q.starter!==undefined ? q.starter : '';
+    html += '<textarea class="tin sql-box" id="pqCode" style="width:100%;min-height:120px;font-family:\'IBM Plex Mono\',monospace" spellcheck="false">'+esc(starter)+'</textarea>';
+    html += '<div class="row" style="margin-top:8px"><button class="btn btn-accent btn-sm" onclick="practiceCheck()">▶ Run & Check</button><button class="btn btn-ghost btn-sm" onclick="practiceReveal()">Reveal answer</button></div>';
+  }else{
+    html += '<div class="row"><button class="btn btn-accent btn-sm" onclick="practiceReveal()">Reveal model answer</button></div>';
+  }
+  html += '<div id="pqResult" style="margin-top:12px"></div>';
+  html += '<div class="row" style="margin-top:14px;justify-content:space-between">';
+  html += '<button class="btn btn-ghost btn-sm" onclick="practiceNav(-1)" '+(practiceState.index===0?'disabled':'')+'>← Prev</button>';
+  html += '<button class="btn btn-ghost btn-sm" onclick="practiceNav(1)" '+(practiceState.index===bank.length-1?'disabled':'')+'>Next →</button>';
+  html += '</div>';
+  html += '</div></div>';
+  out.innerHTML = html;
+}
+function practiceReveal(){
+  var bank = PRACTICE_BANKS[practiceState.topic];
+  var q = bank[practiceState.index];
+  var body = q.type==='code' || practiceState.topic==='sql'
+    ? '<pre class="etl-run-log" style="white-space:pre-wrap">'+esc(q.answer)+'</pre>'
+    : '<p style="font-size:13.5px;line-height:1.6">'+esc(q.answer)+'</p>';
+  $i('pqResult').innerHTML = '<div class="msg-ok" style="display:block">'+body+'</div>';
+}
+async function buildQuizSqliteDB(){
+  if(practiceState.quizSqliteDB) return practiceState.quizSqliteDB;
+  var SQL = await getSqliteReady();
+  var db = new SQL.Database();
+  db.run(PRACTICE_SQL_SEED);
+  practiceState.quizSqliteDB = db;
+  return db;
+}
+function canonRows(rows, cols){
+  return rows.map(function(r){
+    return cols.map(function(c){ var v=r[c]; return v===null||v===undefined?'\u2205':String(v); }).join('\u0001');
+  }).sort();
+}
+async function practiceCheck(){
+  var bank = PRACTICE_BANKS[practiceState.topic];
+  var q = bank[practiceState.index];
+  var code = $i('pqCode').value.trim();
+  var resultEl = $i('pqResult');
+  resultEl.innerHTML = '<div class="out" style="color:var(--ink3)">Running…</div>';
+
+  if(practiceState.topic==='sql'){
+    try{
+      var db = await buildQuizSqliteDB();
+      var res = db.exec(code);
+      var got = res.length ? { fields: res[0].columns, rows: res[0].values.map(function(v){var o={};res[0].columns.forEach(function(c,i){o[c]=v[i];});return o;}) } : {fields:[],rows:[]};
+      var gotCanon = canonRows(got.rows, q.expectCols);
+      var expCanon = q.expectRows.map(function(r){ return r.map(function(v){return v===null?'\u2205':String(v);}).join('\u0001'); }).sort();
+      var pass = JSON.stringify(gotCanon) === JSON.stringify(expCanon);
+      var thead = '<thead><tr>'+got.fields.map(function(f){return'<th>'+esc(f)+'</th>';}).join('')+'</tr></thead>';
+      var tbody = '<tbody>'+got.rows.map(function(r){return '<tr>'+got.fields.map(function(f){return '<td>'+esc(r[f])+'</td>';}).join('')+'</tr>';}).join('')+'</tbody>';
+      resultEl.innerHTML = '<div class="'+(pass?'msg-ok':'msg-err')+'" style="display:block">'+(pass?'✓ Correct!':'✗ Not quite — check the result below against what\'s expected.')+'</div>'
+        +'<div class="preview-wrap" style="margin-top:8px"><table>'+thead+tbody+'</table></div>';
+    }catch(e){
+      resultEl.innerHTML = '<div class="msg-err" style="display:block">SQL error: '+esc(e.message||e)+'</div>';
+    }
+    return;
+  }
+
+  if(q.type==='code'){
+    try{
+      var py = await getPyodide();
+      var captured = py.runPython(`
+import sys, io
+_buf = io.StringIO()
+_old = sys.stdout
+sys.stdout = _buf
+try:
+    exec(${JSON.stringify(code)})
+finally:
+    sys.stdout = _old
+_buf.getvalue()
+`);
+      var gotOut = (captured||'').trim();
+      var expOut = (q.expectOutput||'').trim();
+      var pass2 = gotOut === expOut;
+      resultEl.innerHTML = '<div class="'+(pass2?'msg-ok':'msg-err')+'" style="display:block">'+(pass2?'✓ Correct! Output: ':'✗ Not quite. Your output: ')+'<code>'+esc(gotOut||'(nothing printed)')+'</code>'+(pass2?'':'<br>Expected: <code>'+esc(expOut)+'</code>')+'</div>';
+    }catch(e){
+      resultEl.innerHTML = '<div class="msg-err" style="display:block">Python error: '+esc(e.message||e)+'</div>';
+    }
+    return;
+  }
+}
+
+/* ---- Flashcard mode ---- */
+function renderPracticeFlashcard(){
+  var bank = PRACTICE_BANKS[practiceState.topic];
+  var out = $i('practiceCardArea');
+  if(!bank.length){ out.innerHTML = '<div class="card"><div class="card-body">No questions in this topic yet.</div></div>'; return; }
+  var q = bank[practiceState.index];
+  var showBack = practiceState.cardFlipped;
+  var bodyText = showBack ? q.answer : q.prompt;
+  var isCodeAnswer = showBack && (q.type==='code' || practiceState.topic==='sql');
+  var html = '<div class="card" style="cursor:pointer;min-height:220px" onclick="flipPracticeCard()">';
+  html += '<div class="card-body" style="display:flex;flex-direction:column;justify-content:center;min-height:200px">';
+  html += '<div style="font-family:monospace;font-size:11px;color:var(--ink3);margin-bottom:10px">'+(showBack?'ANSWER — click to flip back':'QUESTION #'+q.priority+' — click to reveal')+'</div>';
+  html += isCodeAnswer
+    ? '<pre class="etl-run-log" style="white-space:pre-wrap">'+esc(bodyText)+'</pre>'
+    : '<p style="font-size:15px;line-height:1.6">'+esc(bodyText)+'</p>';
+  html += '</div></div>';
+  html += '<div class="row" style="margin-top:14px;justify-content:space-between">';
+  html += '<button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();practiceNav(-1)" '+(practiceState.index===0?'disabled':'')+'>← Prev</button>';
+  html += '<button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();practiceNav(1)" '+(practiceState.index===bank.length-1?'disabled':'')+'>Next →</button>';
+  html += '</div>';
+  out.innerHTML = html;
+}
+function flipPracticeCard(){
+  practiceState.cardFlipped = !practiceState.cardFlipped;
+  renderPracticeFlashcard();
 }
 
 /* ============================================================
