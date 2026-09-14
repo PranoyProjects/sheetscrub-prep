@@ -209,6 +209,7 @@ tr.frow th{top:33px;background:#22345a;padding:4px 7px}
 .cf{width:100%;min-width:70px;font-family:'IBM Plex Mono',monospace;font-size:11px;background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.2);border-radius:5px;padding:3px 7px}
 .cf::placeholder{color:rgba(255,255,255,.4)}
 td{padding:6px 12px;border-top:1px solid var(--line);white-space:nowrap;max-width:240px;overflow:hidden;text-overflow:ellipsis}
+.lrn-table td,.lrn-table th{white-space:normal;overflow:visible;text-overflow:clip;max-width:none;word-break:normal;vertical-align:top;line-height:1.5}
 td.null{color:var(--bad);background:var(--bad-bg);font-style:italic}
 
 /* ===== CHART STUDIO ===== */
@@ -351,6 +352,13 @@ td.null{color:var(--bad);background:var(--bad-bg);font-style:italic}
       <div class="nav-item" data-page="charts" onclick="navigate('charts',this)"><span class="icon">📊</span>Charts</div>
       <div class="nav-section">Automate</div>
       <div class="nav-item" data-page="etl" onclick="navigate('etl',this)"><span class="icon">🔄</span>ETL Pipelines</div>
+      <div class="nav-section">Learn</div>
+      <div class="nav-item" data-page="learn-sql" onclick="navigate('learn-sql',this)"><span class="icon">🎓</span>SQL</div>
+      <div class="nav-item" data-page="learn-pyspark" onclick="navigate('learn-pyspark',this)"><span class="icon">🎓</span>PySpark</div>
+      <div class="nav-item" data-page="learn-python" onclick="navigate('learn-python',this)"><span class="icon">🎓</span>Python</div>
+      <div class="nav-item" data-page="learn-dc" onclick="navigate('learn-dc',this)"><span class="icon">🎓</span>Data Cloud</div>
+      <div class="nav-item" data-page="learn-dbx" onclick="navigate('learn-dbx',this)"><span class="icon">🎓</span>Databricks</div>
+      <div class="nav-item" data-page="learn-map" onclick="navigate('learn-map',this)"><span class="icon">🗺️</span>Cross-Map</div>
       <div class="nav-section">Account</div>
       <div class="nav-item" data-page="settings" onclick="navigate('settings',this)"><span class="icon">⚙️</span>Settings</div>
     </nav>
@@ -634,6 +642,1558 @@ td.null{color:var(--bad);background:var(--bad-bg);font-style:italic}
         </div>
       </div>
 
+      <!-- ===== PAGE: LEARN - SQL ===== -->
+      <div class="page" id="page-learn-sql">
+        <h2 class="arch" style="font-size:22px;margin-bottom:6px">Learn: SQL</h2>
+        <p style="color:var(--ink3);font-size:14px;margin-bottom:18px">Real execution against your own loaded datasets, via the same SQLite engine that powers CTE/window-function queries in the SQL / Query panel.</p>
+
+        <div class="card">
+          <div class="card-head" onclick="toggleCard('lrnSqlCteCard')"><h3>CTEs — WITH clause</h3><span class="toggle"></span></div>
+          <div class="card-body">
+            <p style="font-size:13px;color:var(--ink3);margin-bottom:10px">A CTE is a named temporary result set scoped to one query. Uses whichever dataset is currently active (top-left tabs) — load one first if you haven't.</p>
+            <textarea class="tin sql-box" id="lrnSqlCte" style="width:100%;min-height:90px" spellcheck="false">WITH dept_avg AS (
+  SELECT department_id, AVG(salary) AS avg_sal
+  FROM {table}
+  GROUP BY department_id
+)
+SELECT e.employee_id, e.department_id, e.salary, d.avg_sal
+FROM {table} e
+JOIN dept_avg d ON e.department_id = d.department_id
+WHERE e.salary > d.avg_sal;</textarea>
+            <div class="row" style="margin-top:8px"><button class="btn btn-accent btn-sm" onclick="lrnRunSql('lrnSqlCte','lrnSqlCteOut')">▶ Run</button></div>
+            <div class="preview-wrap" style="margin-top:10px"><table id="lrnSqlCteOut"></table></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head" onclick="toggleCard('lrnSqlWinCard')"><h3>Window functions — OVER()</h3><span class="toggle"></span></div>
+          <div class="card-body">
+            <p style="font-size:13px;color:var(--ink3);margin-bottom:10px">Computes across related rows without collapsing them, unlike GROUP BY.</p>
+            <textarea class="tin sql-box" id="lrnSqlWin" style="width:100%;min-height:90px" spellcheck="false">SELECT *,
+  RANK() OVER (PARTITION BY department_id ORDER BY salary DESC) AS dept_rank,
+  LAG(salary) OVER (PARTITION BY department_id ORDER BY salary DESC) AS gap_to_next
+FROM {table}
+ORDER BY department_id, dept_rank;</textarea>
+            <div class="row" style="margin-top:8px"><button class="btn btn-accent btn-sm" onclick="lrnRunSql('lrnSqlWin','lrnSqlWinOut')">▶ Run</button></div>
+            <div class="preview-wrap" style="margin-top:10px"><table id="lrnSqlWinOut"></table></div>
+            <div class="msg-ok" style="display:block;margin-top:10px">Tip: click "⇄ Translate" in the SQL / Query panel to see either of these as real, correct PySpark — CTEs and window functions both translate properly now.</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head" onclick="toggleCard('lrnSqlBoxCard')"><h3>Sandbox</h3><span class="toggle"></span></div>
+          <div class="card-body">
+            <p style="font-size:13px;color:var(--ink3);margin-bottom:10px">Write <code>{table}</code> as a placeholder for whichever dataset tab is active, or use a real table name directly.</p>
+            <textarea class="tin sql-box" id="lrnSqlFree" style="width:100%;min-height:70px" spellcheck="false">SELECT * FROM {table} LIMIT 10;</textarea>
+            <div class="row" style="margin-top:8px"><button class="btn btn-accent btn-sm" onclick="lrnRunSql('lrnSqlFree','lrnSqlFreeOut')">▶ Run</button></div>
+            <div class="preview-wrap" style="margin-top:10px"><table id="lrnSqlFreeOut"></table></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head" onclick="toggleCard('lrnSqlIdxCard')"><h3>Indexing</h3><span class="toggle"></span></div>
+          <div class="card-body">
+            <table class="lrn-table" style="font-size:12.5px;width:100%;margin-bottom:10px">
+              <thead><tr><th>Type</th><th>What it does</th><th>When to use</th></tr></thead>
+              <tbody>
+                <tr><td><b>Clustered</b></td><td>Physically sorts table rows on disk by the index key — one per table</td><td>Range queries, primary key lookups</td></tr>
+                <tr><td><b>Non-clustered</b></td><td>Separate structure pointing back to rows — many per table</td><td>Frequent lookups on non-PK columns</td></tr>
+                <tr><td><b>Covering</b></td><td>Includes all columns a query needs, so the engine never touches the base table</td><td>Hot read-path queries — biggest single perf win</td></tr>
+              </tbody>
+            </table>
+            <p style="font-size:13px;color:var(--ink3);line-height:1.6">
+              <b>Cardinality</b> matters: index high-cardinality columns (unique-ish values) — indexing a boolean or a 3-value status column rarely helps, since the engine still has to scan most of the table.<br>
+              <b>Sargability</b>: a predicate is "sargable" if the engine can use an index on it directly. Wrapping an indexed column in a function — <code>WHERE YEAR(order_date) = 2025</code> — makes it non-sargable; the engine must evaluate the function per row instead. Rewrite as a sargable range: <code>WHERE order_date >= '2025-01-01' AND order_date &lt; '2026-01-01'</code>.<br>
+              <b>Lakehouse note</b>: Delta Lake / Databricks doesn't use traditional B-tree indexes — instead: <b>Z-ordering</b> co-locates related data on disk (multi-dimensional clustering), <b>data skipping</b> uses file-level min/max statistics to skip whole files, and <b>Bloom filters</b> can be added on specific columns for fast existence checks. Same goal (avoid scanning irrelevant data), different mechanism.
+            </p>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head" onclick="toggleCard('lrnSqlNormCard')"><h3>Normalization</h3><span class="toggle"></span></div>
+          <div class="card-body">
+            <table class="lrn-table" style="font-size:12.5px;width:100%;margin-bottom:10px">
+              <thead><tr><th>Form</th><th>Rule</th><th>Fixes</th></tr></thead>
+              <tbody>
+                <tr><td><b>1NF</b></td><td>Atomic columns — no repeating groups or arrays in a cell</td><td>Un-atomic values (e.g. "SQL,Python,Spark" in one cell)</td></tr>
+                <tr><td><b>2NF</b></td><td>1NF + every non-key column depends on the <i>whole</i> primary key</td><td>Partial dependency (only applies to composite keys)</td></tr>
+                <tr><td><b>3NF</b></td><td>2NF + no non-key column depends on another non-key column</td><td>Transitive dependency (e.g. storing dept_name in the employees table when it depends on department_id, not employee_id)</td></tr>
+                <tr><td><b>4NF</b></td><td>3NF + no independent multi-valued dependencies in one table</td><td>Rare in practice — two unrelated many-valued facts crammed into one table</td></tr>
+              </tbody>
+            </table>
+            <p style="font-size:13px;color:var(--ink3);line-height:1.6">
+              The three classic anomalies normalization prevents: <b>update</b> (same fact stored in multiple rows, update one and miss the others), <b>insert</b> (can't add a fact until an unrelated fact also exists), <b>delete</b> (deleting one fact accidentally destroys another).<br>
+              <b>Denormalization</b> is the deliberate reverse — done on purpose in OLAP/analytics for read speed (star schemas, wide Gold tables) at the cost of write-time complexity and some redundancy. This is why an OLTP system (normalized, write-optimized) and a Databricks Gold table (denormalized, read-optimized) look so different even when modeling the same business.
+            </p>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head" onclick="toggleCard('lrnSqlScdCard')"><h3>SCD Type 2 (Slowly Changing Dimension)</h3><span class="toggle"></span></div>
+          <div class="card-body">
+            <p style="font-size:13px;color:var(--ink3);line-height:1.6;margin-bottom:10px">
+              SCD Type 2 preserves history: instead of overwriting a changed value (Type 1), insert a new row and mark the old one expired. Needs <code>effective_date</code>, <code>expiry_date</code>, and <code>is_current</code> columns.
+            </p>
+            <table class="lrn-table" style="font-size:12.5px;width:100%;margin-bottom:10px">
+              <thead><tr><th>Type</th><th>Behavior</th></tr></thead>
+              <tbody>
+                <tr><td><b>Type 0</b></td><td>Fixed — never changes once written</td></tr>
+                <tr><td><b>Type 1</b></td><td>Overwrite in place — no history kept</td></tr>
+                <tr><td><b>Type 2</b></td><td>Insert new row + expire old — full audit trail</td></tr>
+                <tr><td><b>Type 3</b></td><td>Limited history via an extra "previous value" column</td></tr>
+              </tbody>
+            </table>
+            <p style="font-size:13px;color:var(--ink3);margin-bottom:8px">Real Type 2 needs two steps in a single Delta MERGE — you can't cleanly expire the old row and insert the new one in one MATCHED clause:</p>
+            <pre class="etl-run-log" style="white-space:pre-wrap">-- Step 1: expire changed rows
+MERGE INTO dim_customer AS target
+USING staged_updates AS src
+ON target.customer_id = src.customer_id AND target.is_current = true
+WHEN MATCHED AND target.city != src.city THEN
+  UPDATE SET is_current = false, expiry_date = current_date()
+
+-- Step 2: insert new versions for anything that changed
+INSERT INTO dim_customer
+SELECT src.*, current_date() AS effective_date, NULL AS expiry_date, true AS is_current
+FROM staged_updates src
+JOIN dim_customer target ON src.customer_id = target.customer_id
+WHERE target.is_current = false AND target.expiry_date = current_date();</pre>
+            <div class="msg-ok" style="display:block;margin-top:10px">Try the SCD2 concept in the Sandbox above using SQLite's <code>INSERT ... ON CONFLICT</code> as a simplified stand-in — not identical to Delta's MERGE INTO syntax, but the same expire-then-insert logic.</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head" onclick="toggleCard('lrnSqlOrderCard')"><h3>Query execution order</h3><span class="toggle"></span></div>
+          <div class="card-body">
+            <p style="font-size:13px;color:var(--ink3);line-height:1.8">
+              <b>FROM</b> → <b>WHERE</b> → <b>GROUP BY</b> → <b>HAVING</b> → <b>SELECT</b> → <b>ORDER BY</b> → <b>LIMIT</b><br>
+              This is the logical order the engine evaluates in — not the order you type it. It's why <code>WHERE</code> can't reference a <code>SELECT</code> alias (WHERE runs before SELECT), but <code>ORDER BY</code> can (it runs after). It's also why <code>HAVING</code> filters on aggregates and <code>WHERE</code> doesn't — WHERE runs before GROUP BY even exists.
+            </p>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head" onclick="toggleCard('lrnSqlJoinCard')"><h3>Joins, all 6 types + cardinality</h3><span class="toggle"></span></div>
+          <div class="card-body">
+            <table class="lrn-table" style="font-size:12.5px;width:100%;margin-bottom:10px">
+              <thead><tr><th>Join</th><th>Returns</th></tr></thead>
+              <tbody>
+                <tr><td><b>INNER</b></td><td>Only rows with a match on both sides</td></tr>
+                <tr><td><b>LEFT</b></td><td>All left rows, matched right columns or NULL</td></tr>
+                <tr><td><b>RIGHT</b></td><td>All right rows, matched left columns or NULL</td></tr>
+                <tr><td><b>FULL OUTER</b></td><td>All rows from both sides, NULL where unmatched</td></tr>
+                <tr><td><b>SELF</b></td><td>A table joined to itself (org charts, manager lookups)</td></tr>
+                <tr><td><b>CROSS</b></td><td>Every row × every row (Cartesian product, no ON clause)</td></tr>
+              </tbody>
+            </table>
+            <p style="font-size:13px;color:var(--ink3);line-height:1.6">
+              <b>Join cardinality math</b> — the output row count isn't just "left rows + right rows." For an INNER JOIN, if a key value appears <i>m</i> times on the left and <i>n</i> times on the right, that key alone contributes <i>m × n</i> rows to the output. A table with duplicate keys on both sides of a join is the classic "row count exploded" interview bug — always check for duplicate keys before joining.
+            </p>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head" onclick="toggleCard('lrnSqlSubCard')"><h3>Subqueries</h3><span class="toggle"></span></div>
+          <div class="card-body">
+            <table class="lrn-table" style="font-size:12.5px;width:100%">
+              <thead><tr><th>Type</th><th>Runs</th><th>Example use</th></tr></thead>
+              <tbody>
+                <tr><td><b>Scalar</b></td><td>Returns one value</td><td><code>WHERE salary > (SELECT AVG(salary) FROM employees)</code></td></tr>
+                <tr><td><b>Multi-row</b></td><td>Returns a list</td><td><code>WHERE department_id IN (SELECT id FROM active_depts)</code></td></tr>
+                <tr><td><b>Non-correlated</b></td><td>Once, independent of the outer query</td><td>The two examples above</td></tr>
+                <tr><td><b>Correlated</b></td><td>Once per outer row — references an outer column</td><td><code>WHERE EXISTS (SELECT 1 FROM t2 WHERE t2.id = t1.id)</code></td></tr>
+              </tbody>
+            </table>
+            <p style="font-size:13px;color:var(--ink3);line-height:1.6;margin-top:10px">A correlated subquery is usually rewritable as a JOIN and often runs faster that way, since the engine can plan it as a single join instead of re-running the subquery per outer row. <code>NOT IN</code> with a subquery that can return NULL is a classic trap — a single NULL in the subquery's result makes the whole <code>NOT IN</code> match nothing. <code>NOT EXISTS</code> doesn't have this problem.</p>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head" onclick="toggleCard('lrnSqlAggCard')"><h3>Aggregations — WHERE vs HAVING, COUNT semantics</h3><span class="toggle"></span></div>
+          <div class="card-body">
+            <table class="lrn-table" style="font-size:12.5px;width:100%">
+              <thead><tr><th></th><th>WHERE</th><th>HAVING</th></tr></thead>
+              <tbody><tr><td>Filters</td><td>Individual rows, before grouping</td><td>Aggregated groups, after grouping</td></tr>
+              <tr><td>Can reference</td><td>Any column</td><td>Aggregate functions or GROUP BY columns</td></tr></tbody>
+            </table>
+            <p style="font-size:13px;color:var(--ink3);line-height:1.6;margin-top:10px">
+              <code>COUNT(*)</code> counts all rows including NULLs. <code>COUNT(column)</code> skips NULLs in that column. <code>COUNT(DISTINCT column)</code> counts unique non-NULL values. This distinction is a frequent source of off-by-N bugs when a column has NULLs.
+            </p>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head" onclick="toggleCard('lrnSqlPracticeCard')"><h3>Practice questions (click to reveal answer)</h3><span class="toggle"></span></div>
+          <div class="card-body">
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">1. Find the 2nd highest salary — two different ways.</summary>
+              <pre class="etl-run-log" style="white-space:pre-wrap;margin-top:8px">-- Way 1: OFFSET (breaks on ties — skips duplicate top values individually)
+SELECT DISTINCT salary FROM employees ORDER BY salary DESC LIMIT 1 OFFSET 1;
+
+-- Way 2: DENSE_RANK (ties share a rank, more commonly what's actually wanted)
+SELECT salary FROM (
+  SELECT salary, DENSE_RANK() OVER (ORDER BY salary DESC) AS rnk FROM employees
+) t WHERE rnk = 2;</pre>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">2. Find duplicate rows in a table with no unique ID.</summary>
+              <pre class="etl-run-log" style="white-space:pre-wrap;margin-top:8px">SELECT first_name, department_id, COUNT(*) AS cnt
+FROM employees
+GROUP BY first_name, department_id
+HAVING COUNT(*) > 1;</pre>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">3. Remove duplicates, keeping one copy (no ctid/rowid available, e.g. in Databricks).</summary>
+              <pre class="etl-run-log" style="white-space:pre-wrap;margin-top:8px">WITH ranked AS (
+  SELECT *, ROW_NUMBER() OVER (PARTITION BY first_name, department_id ORDER BY employee_id) AS rn
+  FROM employees
+)
+SELECT * FROM ranked WHERE rn = 1;</pre>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">4. Employees earning more than their manager (self-join).</summary>
+              <pre class="etl-run-log" style="white-space:pre-wrap;margin-top:8px">SELECT e.first_name AS employee, e.salary, m.first_name AS manager, m.salary AS mgr_salary
+FROM employees e
+JOIN employees m ON e.manager_id = m.employee_id
+WHERE e.salary > m.salary;</pre>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">5. Running total and 3-row moving average.</summary>
+              <pre class="etl-run-log" style="white-space:pre-wrap;margin-top:8px">SELECT txn_date, amount,
+  SUM(amount) OVER (ORDER BY txn_date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS running_total,
+  AVG(amount) OVER (ORDER BY txn_date ROWS BETWEEN 2 PRECEDING AND CURRENT ROW) AS moving_avg_3
+FROM transactions
+ORDER BY txn_date;</pre>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">6. Gaps-and-islands: find consecutive date streaks per employee.</summary>
+              <pre class="etl-run-log" style="white-space:pre-wrap;margin-top:8px">-- The trick: (date - ROW_NUMBER) is constant within a consecutive streak
+WITH numbered AS (
+  SELECT employee_id, visit_date,
+    ROW_NUMBER() OVER (PARTITION BY employee_id ORDER BY visit_date) AS rn
+  FROM visits
+),
+grouped AS (
+  SELECT *, DATE(visit_date, '-' || rn || ' days') AS grp
+  FROM numbered
+)
+SELECT employee_id, MIN(visit_date) AS streak_start, MAX(visit_date) AS streak_end, COUNT(*) AS streak_len
+FROM grouped
+GROUP BY employee_id, grp;</pre>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">7. Top-N per group (e.g. top 2 highest-paid per department).</summary>
+              <pre class="etl-run-log" style="white-space:pre-wrap;margin-top:8px">WITH ranked AS (
+  SELECT *, ROW_NUMBER() OVER (PARTITION BY department_id ORDER BY salary DESC) AS rn
+  FROM employees
+)
+SELECT * FROM ranked WHERE rn <= 2;</pre>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">8. Find orphaned foreign keys (data quality check).</summary>
+              <pre class="etl-run-log" style="white-space:pre-wrap;margin-top:8px">SELECT e.* FROM employees e
+LEFT JOIN departments d ON e.department_id = d.department_id
+WHERE d.department_id IS NULL;</pre>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">9. PIVOT-style transform without a native PIVOT (conditional aggregation).</summary>
+              <pre class="etl-run-log" style="white-space:pre-wrap;margin-top:8px">SELECT department_id,
+  SUM(CASE WHEN job_title = 'Engineer' THEN 1 ELSE 0 END) AS engineers,
+  SUM(CASE WHEN job_title = 'Manager' THEN 1 ELSE 0 END) AS managers
+FROM employees
+GROUP BY department_id;</pre>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">10. Rewrite a correlated subquery as a JOIN.</summary>
+              <pre class="etl-run-log" style="white-space:pre-wrap;margin-top:8px">-- Correlated subquery:
+SELECT * FROM departments d
+WHERE EXISTS (SELECT 1 FROM employees e WHERE e.department_id = d.department_id);
+
+-- As a JOIN (usually faster):
+SELECT DISTINCT d.* FROM departments d
+JOIN employees e ON e.department_id = d.department_id;</pre>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">11. Alternate odd/even rows using ROW_NUMBER + MOD.</summary>
+              <pre class="etl-run-log" style="white-space:pre-wrap;margin-top:8px">SELECT * FROM (
+  SELECT *, ROW_NUMBER() OVER (ORDER BY employee_id) AS rn FROM employees
+) t WHERE rn % 2 = 0;  -- even rows only; use = 1 for odd</pre>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">12. Create an empty table with the same structure as another (no data).</summary>
+              <pre class="etl-run-log" style="white-space:pre-wrap;margin-top:8px">SELECT * INTO employees_backup FROM employees WHERE 1 = 0;
+-- SQLite/Spark SQL equivalent (CTAS with an always-false filter):
+CREATE TABLE employees_backup AS SELECT * FROM employees WHERE 1 = 0;</pre>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">13. Find employees hired in the last 6 months.</summary>
+              <pre class="etl-run-log" style="white-space:pre-wrap;margin-top:8px">SELECT * FROM employees
+WHERE hire_date >= DATE('now', '-6 months');</pre>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">14. Find gaps in a numeric sequence (e.g. missing invoice numbers).</summary>
+              <pre class="etl-run-log" style="white-space:pre-wrap;margin-top:8px">WITH RECURSIVE seq(n) AS (
+  SELECT MIN(invoice_id) FROM invoices
+  UNION ALL
+  SELECT n+1 FROM seq WHERE n < (SELECT MAX(invoice_id) FROM invoices)
+)
+SELECT n AS missing_invoice_id FROM seq
+WHERE n NOT IN (SELECT invoice_id FROM invoices);</pre>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">15. Sequentially available seats problem (find a run of N consecutive free seats).</summary>
+              <pre class="etl-run-log" style="white-space:pre-wrap;margin-top:8px">-- Same gaps-and-islands trick as the streak problem: (seat_number - ROW_NUMBER) is
+-- constant within a consecutive run of free seats.
+WITH free_seats AS (
+  SELECT seat_number, ROW_NUMBER() OVER (ORDER BY seat_number) AS rn
+  FROM seats WHERE status = 'free'
+),
+runs AS (
+  SELECT *, seat_number - rn AS grp FROM free_seats
+)
+SELECT MIN(seat_number) AS run_start, COUNT(*) AS run_length
+FROM runs GROUP BY grp HAVING COUNT(*) >= 3;  -- 3+ consecutive free seats</pre>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">16. UNPIVOT-style transform: turn columns into rows.</summary>
+              <pre class="etl-run-log" style="white-space:pre-wrap;margin-top:8px">-- If you have q1_sales, q2_sales, q3_sales, q4_sales columns per employee:
+SELECT employee_id, 'q1' AS quarter, q1_sales AS sales FROM sales_wide
+UNION ALL SELECT employee_id, 'q2', q2_sales FROM sales_wide
+UNION ALL SELECT employee_id, 'q3', q3_sales FROM sales_wide
+UNION ALL SELECT employee_id, 'q4', q4_sales FROM sales_wide;</pre>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">17. Recursive CTE: build an org chart showing each employee's full management chain.</summary>
+              <pre class="etl-run-log" style="white-space:pre-wrap;margin-top:8px">WITH RECURSIVE org_chart AS (
+  SELECT employee_id, first_name, manager_id, 0 AS depth, first_name AS chain
+  FROM employees WHERE manager_id IS NULL  -- top of the org
+  UNION ALL
+  SELECT e.employee_id, e.first_name, e.manager_id, oc.depth + 1, oc.chain || ' > ' || e.first_name
+  FROM employees e
+  JOIN org_chart oc ON e.manager_id = oc.employee_id
+)
+SELECT * FROM org_chart ORDER BY depth;</pre>
+              <p style="font-size:12.5px;color:var(--ink3);margin-top:6px">Note: real-world SQL engines vary on recursive CTE syntax (Databricks/Spark SQL support differs from SQLite) — always check the target engine's exact recursive-CTE dialect before relying on this pattern in production.</p>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">18. Filter rows without using a WHERE clause.</summary>
+              <pre class="etl-run-log" style="white-space:pre-wrap;margin-top:8px">SELECT department_id, COUNT(*) AS cnt
+FROM employees
+GROUP BY department_id
+HAVING COUNT(*) > 5;  -- HAVING can filter without any WHERE clause present</pre>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">19. Highlight/find records where a countDistinct join-back reveals a data conflict (e.g. an employee_id mapped to more than one department across source tables).</summary>
+              <pre class="etl-run-log" style="white-space:pre-wrap;margin-top:8px">SELECT employee_id, COUNT(DISTINCT department_id) AS dept_count
+FROM employees_source_union   -- e.g. a UNION of multiple source feeds
+GROUP BY employee_id
+HAVING COUNT(DISTINCT department_id) > 1;</pre>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">20. QUALIFY — filter on a window function without wrapping the query in a subquery (Databricks/Snowflake support this; SQLite doesn't).</summary>
+              <pre class="etl-run-log" style="white-space:pre-wrap;margin-top:8px">-- Databricks SQL / Snowflake:
+SELECT *, ROW_NUMBER() OVER (PARTITION BY department_id ORDER BY salary DESC) AS rn
+FROM employees
+QUALIFY rn = 1;
+
+-- The portable equivalent everywhere else (including this app's SQLite engine):
+SELECT * FROM (
+  SELECT *, ROW_NUMBER() OVER (PARTITION BY department_id ORDER BY salary DESC) AS rn
+  FROM employees
+) t WHERE rn = 1;</pre>
+            </details>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== PAGE: LEARN - PYSPARK ===== -->
+      <div class="page" id="page-learn-pyspark">
+        <h2 class="arch" style="font-size:22px;margin-bottom:6px">Learn: PySpark</h2>
+        <p style="color:var(--ink3);font-size:14px;margin-bottom:18px">Runs via Pyodide (real Python in the browser) with a small <code>pyspark</code>-syntax compatibility layer backed by pandas underneath. <b>This is not a real Spark cluster</b> — it's here so you can practice the exact PySpark API surface (<code>spark.table</code>, <code>.filter</code>, <code>.groupBy().agg()</code>, <code>.withColumn</code>, <code>Window</code>, <code>.join</code>) with correct syntax and see real output, then run the same code for real on Databricks.</p>
+        <div class="card">
+          <div class="card-body">
+            <div class="row" style="margin-bottom:10px"><button class="btn btn-ghost btn-sm" id="lrnPyStatus" disabled>⏳ Loading Python runtime…</button></div>
+            <textarea class="tin sql-box" id="lrnPysparkBox" style="width:100%;min-height:180px;font-family:'IBM Plex Mono',monospace" spellcheck="false">df = spark.table("{table}")
+
+result = (
+    df.groupBy("department_id")
+      .agg({"salary": "mean"})
+)
+result.show()</textarea>
+            <div class="row" style="margin-top:8px"><button class="btn btn-accent btn-sm" id="lrnPysparkRun" onclick="lrnRunPyspark()" disabled>▶ Run</button></div>
+            <pre class="etl-run-log" id="lrnPysparkOut" style="margin-top:10px;min-height:60px">Waiting for runtime…</pre>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head" onclick="toggleCard('lrnPySparkArchCard')"><h3>Architecture & execution flow</h3><span class="toggle"></span></div>
+          <div class="card-body">
+            <p style="font-size:13px;color:var(--ink3);line-height:1.7">
+              <b>Driver</b> — runs your code, builds the DAG, dispatches tasks. Lives outside the cluster's worker nodes.<br>
+              <b>Executors</b> — run on worker nodes, execute tasks, cache data, return results to the driver.<br>
+              <b>Cluster manager</b> — allocates resources (YARN, Kubernetes, Standalone, Mesos).<br>
+              <b>Flow</b>: code → logical plan → Catalyst optimizer (predicate pushdown, column pruning) → physical plan → DAG scheduler splits into stages at shuffle boundaries → task scheduler → executors → results back to driver.
+            </p>
+            <table class="lrn-table" style="font-size:12.5px;width:100%;margin-top:10px">
+              <thead><tr><th></th><th>Transformation</th><th>Action</th></tr></thead>
+              <tbody><tr><td><b>Laziness</b></td><td>Builds the plan, doesn't run yet</td><td>Triggers actual execution</td></tr>
+              <tr><td><b>Examples</b></td><td>filter, select, withColumn, groupBy</td><td>show, count, collect, write</td></tr></tbody>
+            </table>
+            <p style="font-size:13px;color:var(--ink3);line-height:1.7;margin-top:10px">
+              <b>Narrow</b> transformation: each output partition depends on one input partition (filter, select — no shuffle).<br>
+              <b>Wide</b> transformation: output depends on multiple input partitions (groupBy, join — requires a shuffle, a stage boundary).
+            </p>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head" onclick="toggleCard('lrnPySparkOptCard')"><h3>Optimization cheat sheet</h3><span class="toggle"></span></div>
+          <div class="card-body">
+            <table class="lrn-table" style="font-size:12.5px;width:100%">
+              <thead><tr><th>Technique</th><th>Solves</th><th>How</th></tr></thead>
+              <tbody>
+                <tr><td>Partition pruning</td><td>Scanning unneeded data</td><td>Skip partitions that don't match the filter</td></tr>
+                <tr><td>Predicate pushdown</td><td>Late filtering</td><td>Push WHERE down to the file-read layer</td></tr>
+                <tr><td>Broadcast join</td><td>Slow joins w/ small table</td><td>Copy small table to all workers, avoid shuffle</td></tr>
+                <tr><td>Z-Ordering (Delta)</td><td>Slow lookups on non-partition cols</td><td>Co-locate related data on disk</td></tr>
+                <tr><td>OPTIMIZE / compaction</td><td>Small file problem</td><td>Merge many tiny files into fewer large ones</td></tr>
+                <tr><td>cache()/persist()</td><td>Recomputing same DataFrame</td><td>Keep result in memory/disk after first compute</td></tr>
+                <tr><td>repartition vs coalesce</td><td>Wrong file count/skew</td><td>repartition = full shuffle rebalance; coalesce = merge, no shuffle</td></tr>
+                <tr><td>Salting</td><td>Skewed joins</td><td>Random suffix on skewed key spreads load</td></tr>
+                <tr><td>AQE</td><td>Static bad query plans</td><td>Re-optimizes plan at runtime using real data stats</td></tr>
+                <tr><td>Column pruning</td><td>Reading unused columns</td><td>SELECT only needed columns</td></tr>
+              </tbody>
+            </table>
+            <p style="font-size:13px;color:var(--ink3);line-height:1.6;margin-top:10px">Diagnose from the Spark UI first (shuffle/skew? small files? unnecessary scan?), then match the fix to the actual bottleneck — don't apply the list blind.</p>
+
+            <p style="font-size:13px;color:var(--ink3);margin-top:14px;margin-bottom:6px"><b>The "big three," as actual code</b> — these three show up in almost every 2026 interview report regardless of company:</p>
+            <pre class="etl-run-log" style="white-space:pre-wrap">from pyspark.sql import functions as F
+
+# 1. AQE — on by default in modern Spark, but explicit is safer to state in an interview
+spark.conf.set("spark.sql.adaptive.enabled", "true")
+spark.conf.set("spark.sql.adaptive.skewJoin.enabled", "true")
+spark.conf.set("spark.sql.adaptive.coalescePartitions.enabled", "true")
+
+# 2. Broadcast join — force it explicitly when you know one side is small (<~10MB)
+result = big_orders_df.join(F.broadcast(small_country_lookup_df), on="country_code")
+
+# 3. Partition fact tables by the most-filtered column, not an arbitrary one
+(
+    orders_df.write
+    .format("delta")
+    .partitionBy("order_date")   # e.g. if 90% of queries filter WHERE order_date = ...
+    .mode("overwrite")
+    .saveAsTable("gold.orders")
+)</pre>
+
+            <p style="font-size:13px;color:var(--ink3);margin-top:14px;margin-bottom:6px"><b>Batch vs streaming, exactly-once, and watermarking</b> — code, not just definitions:</p>
+            <pre class="etl-run-log" style="white-space:pre-wrap"># Watermarking: tells Spark how late a "late-arriving" event can be before it's dropped,
+# which bounds how much state Structured Streaming has to keep around for aggregations.
+windowed_counts = (
+    events_df
+    .withWatermark("event_time", "10 minutes")   # tolerate up to 10 min of lateness
+    .groupBy(F.window("event_time", "5 minutes"), "device_id")
+    .count()
+)
+
+# Exactly-once semantics: achieved via checkpointing + idempotent sinks, NOT a magic flag.
+# The checkpoint tracks exactly which offsets have been processed, so a restart resumes
+# from the correct point instead of re-processing or skipping data.
+query = (
+    windowed_counts.writeStream
+    .format("delta")
+    .option("checkpointLocation", "/mnt/checkpoints/device_counts")  # this IS the exactly-once mechanism
+    .outputMode("update")
+    .trigger(processingTime="1 minute")
+    .table("silver.device_counts")
+)</pre>
+            <p style="font-size:13px;color:var(--ink3);line-height:1.6;margin-top:10px">Common interview follow-up: "what happens without a watermark on a streaming aggregation?" — the answer is unbounded state growth, since Spark has no way to know an aggregation window is "done" and can be dropped from memory.</p>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head" onclick="toggleCard('lrnPySparkPracticeCard')"><h3>Practice questions (click to reveal answer)</h3><span class="toggle"></span></div>
+          <div class="card-body">
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">1. Read a CSV with an explicit schema (not inferSchema).</summary>
+              <pre class="etl-run-log" style="white-space:pre-wrap;margin-top:8px">from pyspark.sql.types import StructType, StructField, IntegerType, StringType, DoubleType
+
+schema = StructType([
+    StructField("employee_id", IntegerType(), True),
+    StructField("first_name", StringType(), True),
+    StructField("salary", DoubleType(), True),
+])
+df = spark.read.csv("employees.csv", header=True, schema=schema)</pre>
+              <p style="font-size:12.5px;color:var(--ink3);margin-top:6px">Why: inferSchema does a full extra pass over the data and one bad row can silently downgrade a whole column's type (e.g. an INT column becomes STRING). Explicit schema avoids both problems.</p>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">2. Top-N per group using Window (equivalent to the SQL ROW_NUMBER pattern).</summary>
+              <pre class="etl-run-log" style="white-space:pre-wrap;margin-top:8px">from pyspark.sql import Window
+from pyspark.sql import functions as F
+
+w = Window.partitionBy("department_id").orderBy(F.desc("salary"))
+result = (
+    df.withColumn("rn", F.row_number().over(w))
+      .filter(F.col("rn") <= 2)
+)</pre>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">3. Handle a skewed join (one key has way more rows than others).</summary>
+              <pre class="etl-run-log" style="white-space:pre-wrap;margin-top:8px"># Option 1: broadcast the small side (best if one side is genuinely small)
+from pyspark.sql import functions as F
+result = big_df.join(F.broadcast(small_df), on="key", how="left")
+
+# Option 2: salting (when both sides are large and one key dominates)
+salted = big_df.withColumn("salted_key", F.concat_ws("_", "key", (F.rand()*10).cast("int")))
+# ...then explode the small side to match all salt buckets before joining</pre>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">4. Deduplicate rows keeping the most recent by a timestamp column.</summary>
+              <pre class="etl-run-log" style="white-space:pre-wrap;margin-top:8px">from pyspark.sql import Window
+from pyspark.sql import functions as F
+
+w = Window.partitionBy("customer_id").orderBy(F.desc("updated_at"))
+result = (
+    df.withColumn("rn", F.row_number().over(w))
+      .filter(F.col("rn") == 1)
+      .drop("rn")
+)</pre>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">5. Explode a nested/array column (e.g. a "skills" array per employee).</summary>
+              <pre class="etl-run-log" style="white-space:pre-wrap;margin-top:8px">from pyspark.sql import functions as F
+
+result = df.withColumn("skill", F.explode("skills")).select("employee_id", "skill")
+
+# Reverse it: collect back into an array (note: does not dedupe or preserve original order)
+back = result.groupBy("employee_id").agg(F.collect_list("skill").alias("skills"))</pre>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">6. Incremental MERGE (upsert) into a Delta table.</summary>
+              <pre class="etl-run-log" style="white-space:pre-wrap;margin-top:8px">from delta.tables import DeltaTable
+
+target = DeltaTable.forName(spark, "sales.customers")
+(
+    target.alias("t")
+    .merge(updates_df.alias("s"), "t.customer_id = s.customer_id")
+    .whenMatchedUpdateAll()
+    .whenNotMatchedInsertAll()
+    .execute()
+)</pre>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">7. Word count via split + explode + groupBy.</summary>
+              <pre class="etl-run-log" style="white-space:pre-wrap;margin-top:8px">from pyspark.sql import functions as F
+
+result = (
+    df.withColumn("word", F.explode(F.split(F.col("text"), " ")))
+      .groupBy("word")
+      .count()
+      .orderBy(F.desc("count"))
+)</pre>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">8. Read a JDBC source in parallel (partitioned read).</summary>
+              <pre class="etl-run-log" style="white-space:pre-wrap;margin-top:8px">df = (
+    spark.read.format("jdbc")
+    .option("url", "jdbc:postgresql://host:5432/db")
+    .option("dbtable", "employees")
+    .option("partitionColumn", "employee_id")
+    .option("lowerBound", 1)
+    .option("upperBound", 100000)
+    .option("numPartitions", 10)
+    .load()
+)</pre>
+              <p style="font-size:12.5px;color:var(--ink3);margin-top:6px">Without partitionColumn/lowerBound/upperBound/numPartitions, the whole read runs as a single task on one executor — no parallelism.</p>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">9. Diagnose driver vs executor OOM — what's different about each?</summary>
+              <p style="font-size:13px;color:var(--ink3);line-height:1.6;margin-top:8px">
+                <b>Driver OOM</b> — usually caused by <code>.collect()</code> pulling too much data back to the driver, or too many small tasks/broadcast variables accumulating there. Fix: avoid collect() on large data, increase driver memory, or write results directly instead of collecting.<br>
+                <b>Executor OOM</b> — usually a skewed partition, a huge broadcast join, or too many cached DataFrames competing for executor memory. Fix: repartition to even out skew, avoid broadcasting a table that's actually large, unpersist cached data you no longer need.
+              </p>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">10. .transform() vs a UDF — when to use which?</summary>
+              <p style="font-size:13px;color:var(--ink3);line-height:1.6;margin-top:8px">
+                <code>.transform()</code> chains a plain Python function that takes and returns a DataFrame — it's just for readable method chaining, still uses native Spark operations, still gets Catalyst-optimized. A <b>UDF</b> wraps row-level Python logic that Spark can't express natively — it's a performance cliff, since Catalyst can't see inside it and each row round-trips through Python (or worse, JVM↔Python serialization via py4j). Prefer built-in <code>pyspark.sql.functions</code> or <code>.transform()</code> whenever possible; reach for a UDF only when there's truly no native equivalent.
+              </p>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">11. Do an SCD Type 2 upsert with Delta MERGE — the full 2-step pattern in PySpark.</summary>
+              <pre class="etl-run-log" style="white-space:pre-wrap;margin-top:8px">from delta.tables import DeltaTable
+
+target = DeltaTable.forName(spark, "dim_customer")
+
+# Step 1: expire rows whose tracked columns changed
+target.alias("t").merge(
+    updates_df.alias("s"), "t.customer_id = s.customer_id AND t.is_current = true"
+).whenMatchedUpdate(
+    condition="t.city != s.city",
+    set={"is_current": "false", "expiry_date": "current_date()"}
+).execute()
+
+# Step 2: insert new versions for changed rows
+new_versions = (
+    updates_df.alias("s")
+    .join(target.toDF().alias("t"), "customer_id")
+    .where("t.is_current = false AND t.expiry_date = current_date()")
+    .select("s.*")
+    .withColumn("effective_date", F.current_date())
+    .withColumn("expiry_date", F.lit(None))
+    .withColumn("is_current", F.lit(True))
+)
+new_versions.write.format("delta").mode("append").saveAsTable("dim_customer")</pre>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">12. Cache vs persist — what's actually different, and when would you NOT cache?</summary>
+              <p style="font-size:13px;color:var(--ink3);line-height:1.6;margin-top:8px"><code>.cache()</code> is shorthand for <code>.persist(StorageLevel.MEMORY_AND_DISK)</code>. Use persist directly when you want a different storage level (e.g. MEMORY_ONLY for speed if it fits, or DISK_ONLY if memory is tight). Don't cache a DataFrame you only use once — caching costs the first computation plus storage overhead, and only pays off if you reuse the same DataFrame multiple times. Also remember to <code>.unpersist()</code> when done, or it holds memory for the rest of the session.</p>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">13. Read a nested JSON file and flatten one level of nesting.</summary>
+              <pre class="etl-run-log" style="white-space:pre-wrap;margin-top:8px">df = spark.read.json("nested.json")
+# Given a struct column "address" with sub-fields "city","zip":
+flat = df.select(
+    "employee_id",
+    "address.city",
+    "address.zip"
+)</pre>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">14. Repartition vs coalesce — write code showing when each is the right call.</summary>
+              <pre class="etl-run-log" style="white-space:pre-wrap;margin-top:8px"># repartition: full shuffle, use when INCREASING partitions or fixing skew
+df_balanced = df.repartition(200, "customer_id")
+
+# coalesce: no shuffle, only DECREASES partitions, cheaper — use before writing
+# to avoid the small-file problem after a wide transformation
+df_final = df_balanced.coalesce(10)
+df_final.write.format("delta").save("/path/to/table")</pre>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">15. Handle bad/malformed records during a CSV read — three different modes.</summary>
+              <pre class="etl-run-log" style="white-space:pre-wrap;margin-top:8px"># PERMISSIVE (default): bad records become null-filled rows, error captured in _corrupt_record
+df1 = spark.read.option("mode", "PERMISSIVE").csv("data.csv")
+
+# DROPMALFORMED: bad rows silently dropped
+df2 = spark.read.option("mode", "DROPMALFORMED").csv("data.csv")
+
+# FAILFAST: the whole job fails immediately on the first bad record
+df3 = spark.read.option("mode", "FAILFAST").csv("data.csv")</pre>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">16. Two DataFrames should have identical row counts after a transformation, but they don't. How do you debug which rows got lost or duplicated?</summary>
+              <pre class="etl-run-log" style="white-space:pre-wrap;margin-top:8px"># Rows that exist in original but vanished after transform:
+lost = original_df.join(transformed_df, "id", "left_anti")
+
+# Rows that got duplicated (appear more than once in the result):
+from pyspark.sql import functions as F
+dupes = transformed_df.groupBy("id").count().filter(F.col("count") > 1)</pre>
+              <p style="font-size:12.5px;color:var(--ink3);margin-top:6px">left_anti is the key trick here — it returns rows from the left side with no match on the right, which is exactly "what got dropped."</p>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">17. Write a streaming query that reads new files as they land and writes results incrementally.</summary>
+              <pre class="etl-run-log" style="white-space:pre-wrap;margin-top:8px">stream_df = (
+    spark.readStream.format("cloudFiles")
+    .option("cloudFiles.format", "json")
+    .load("/mnt/raw/events/")
+)
+
+query = (
+    stream_df.writeStream
+    .format("delta")
+    .option("checkpointLocation", "/mnt/checkpoints/events")
+    .outputMode("append")
+    .trigger(processingTime="1 minute")
+    .table("bronze_events")
+)</pre>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">18. Rank employees by salary within department, but break ties by hire date (earlier hire wins the tie).</summary>
+              <pre class="etl-run-log" style="white-space:pre-wrap;margin-top:8px">from pyspark.sql import Window
+from pyspark.sql import functions as F
+
+w = Window.partitionBy("department_id").orderBy(F.desc("salary"), F.asc("hire_date"))
+result = df.withColumn("rnk", F.row_number().over(w))</pre>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">19. What does AQE (Adaptive Query Execution) actually change at runtime, concretely?</summary>
+              <p style="font-size:13px;color:var(--ink3);line-height:1.6;margin-top:8px">Three main things: 1) dynamically coalesces post-shuffle partitions that turned out too small, 2) switches a sort-merge join to a broadcast join if runtime stats show one side is actually small, 3) splits skewed partitions detected after the shuffle actually happens (not guessable beforehand). It works by inserting query-plan re-optimization points at shuffle boundaries, using real data statistics gathered from the previous stage rather than the optimizer's upfront estimates.</p>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">20. Mount external cloud storage securely (modern Unity Catalog pattern, not legacy DBFS mount).</summary>
+              <pre class="etl-run-log" style="white-space:pre-wrap;margin-top:8px">-- SQL, not Python — this is a one-time admin/governance setup, not per-notebook code:
+CREATE STORAGE CREDENTIAL my_cred
+  WITH (AZURE_MANAGED_IDENTITY = 'resource-id-here');
+
+CREATE EXTERNAL LOCATION my_location
+  URL 's3://my-bucket/data/'
+  WITH (STORAGE CREDENTIAL my_cred);
+
+-- Then read/write against it like any governed path:
+-- df = spark.read.parquet("s3://my-bucket/data/table1/")</pre>
+              <p style="font-size:12.5px;color:var(--ink3);margin-top:6px">This replaces the old chain of AAD app registration → service principal → Key Vault → dbutils.fs.mount — Unity Catalog's External Locations/Storage Credentials are the current governed, auditable way to do this.</p>
+            </details>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== PAGE: LEARN - PYTHON ===== -->
+      <div class="page" id="page-learn-python">
+        <h2 class="arch" style="font-size:22px;margin-bottom:6px">Learn: Python</h2>
+        <p style="color:var(--ink3);font-size:14px;margin-bottom:18px">Real Python + pandas, running in your browser via Pyodide (WASM CPython). Your active dataset is available as <code>df</code> — every loaded dataset is also available as <code>tables["name"]</code>, e.g. <code>tables["departments"]</code>.</p>
+        <div class="card">
+          <div class="card-body">
+            <div class="row" style="margin-bottom:10px"><button class="btn btn-ghost btn-sm" id="lrnPy2Status" disabled>⏳ Loading Python runtime…</button></div>
+            <textarea class="tin sql-box" id="lrnPythonBox" style="width:100%;min-height:180px;font-family:'IBM Plex Mono',monospace" spellcheck="false">print(df.head())
+print()
+print(df.groupby("department_id")["salary"].mean())</textarea>
+            <div class="row" style="margin-top:8px"><button class="btn btn-accent btn-sm" id="lrnPythonRun" onclick="lrnRunPython()" disabled>▶ Run</button></div>
+            <pre class="etl-run-log" id="lrnPythonOut" style="margin-top:10px;min-height:60px">Waiting for runtime…</pre>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head" onclick="toggleCard('lrnPyOopCard')"><h3>OOP & core concepts (interview-relevant)</h3><span class="toggle"></span></div>
+          <div class="card-body">
+            <table class="lrn-table" style="font-size:12.5px;width:100%">
+              <thead><tr><th>Concept</th><th>What it means</th></tr></thead>
+              <tbody>
+                <tr><td><b>@staticmethod vs @classmethod</b></td><td>staticmethod takes no implicit arg; classmethod takes <code>cls</code>, can access/modify class state</td></tr>
+                <tr><td><b>Abstraction vs Encapsulation</b></td><td>Abstraction hides complexity behind an interface; encapsulation hides internal state behind methods</td></tr>
+                <tr><td><b>MRO (Method Resolution Order)</b></td><td>The order Python searches parent classes for a method — C3 linearization, matters with multiple inheritance</td></tr>
+                <tr><td><b>Shallow vs Deep copy</b></td><td>Shallow copies the outer object only (nested objects still shared); deep copies everything recursively</td></tr>
+                <tr><td><b>Duck typing</b></td><td>"If it walks like a duck…" — Python cares about an object's behavior/methods, not its declared type</td></tr>
+                <tr><td><b>GIL</b></td><td>Global Interpreter Lock — only one thread executes Python bytecode at a time; limits true CPU-bound parallelism via threading (use multiprocessing instead)</td></tr>
+                <tr><td><b>Singleton pattern</b></td><td>Ensures a class has only one instance — typically via <code>__new__</code> override or a module-level instance</td></tr>
+              </tbody>
+            </table>
+            <p style="font-size:13px;color:var(--ink3);line-height:1.6;margin-top:10px">Try any of these directly in the sandbox above — e.g. paste a small class hierarchy and call <code>ClassName.__mro__</code> to see resolution order for real.</p>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head" onclick="toggleCard('lrnPyPracticeCard')"><h3>Practice questions (click to reveal answer — runnable in the sandbox above)</h3><span class="toggle"></span></div>
+          <div class="card-body">
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">1. Remove duplicates from a list without using a library, preserving order.</summary>
+              <pre class="etl-run-log" style="white-space:pre-wrap;margin-top:8px">def dedupe(lst):
+    seen = set()
+    out = []
+    for x in lst:
+        if x not in seen:
+            seen.add(x)
+            out.append(x)
+    return out
+
+print(dedupe([3, 1, 3, 2, 1, 4]))  # [3, 1, 2, 4]</pre>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">2. Merge two already-sorted lists into one sorted list, without using sorted().</summary>
+              <pre class="etl-run-log" style="white-space:pre-wrap;margin-top:8px">def merge_sorted(a, b):
+    i = j = 0
+    out = []
+    while i < len(a) and j < len(b):
+        if a[i] <= b[j]:
+            out.append(a[i]); i += 1
+        else:
+            out.append(b[j]); j += 1
+    out.extend(a[i:])
+    out.extend(b[j:])
+    return out
+
+print(merge_sorted([1,3,5], [2,4,6]))  # [1,2,3,4,5,6]</pre>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">3. Check if a string is a palindrome (ignore case/spaces).</summary>
+              <pre class="etl-run-log" style="white-space:pre-wrap;margin-top:8px">def is_palindrome(s):
+    cleaned = ''.join(c.lower() for c in s if c.isalnum())
+    return cleaned == cleaned[::-1]
+
+print(is_palindrome("A man a plan a canal Panama"))  # True</pre>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">4. Binary tree traversal — inorder, without recursion (using a stack).</summary>
+              <pre class="etl-run-log" style="white-space:pre-wrap;margin-top:8px">class Node:
+    def __init__(self, val, left=None, right=None):
+        self.val, self.left, self.right = val, left, right
+
+def inorder_iterative(root):
+    stack, result, node = [], [], root
+    while stack or node:
+        while node:
+            stack.append(node)
+            node = node.left
+        node = stack.pop()
+        result.append(node.val)
+        node = node.right
+    return result
+
+tree = Node(2, Node(1), Node(3))
+print(inorder_iterative(tree))  # [1, 2, 3]</pre>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">5. Find the median of a large list without loading it all into a single sort (streaming-friendly approach using heaps).</summary>
+              <pre class="etl-run-log" style="white-space:pre-wrap;margin-top:8px">import heapq
+
+class MedianFinder:
+    def __init__(self):
+        self.lo = []  # max-heap (inverted), holds smaller half
+        self.hi = []  # min-heap, holds larger half
+    def add(self, num):
+        heapq.heappush(self.lo, -num)
+        heapq.heappush(self.hi, -heapq.heappop(self.lo))
+        if len(self.hi) > len(self.lo):
+            heapq.heappush(self.lo, -heapq.heappop(self.hi))
+    def median(self):
+        if len(self.lo) > len(self.hi):
+            return -self.lo[0]
+        return (-self.lo[0] + self.hi[0]) / 2
+
+mf = MedianFinder()
+for n in [5, 15, 1, 3]: mf.add(n)
+print(mf.median())  # 4.0</pre>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">6. A decorator that times how long a function takes.</summary>
+              <pre class="etl-run-log" style="white-space:pre-wrap;margin-top:8px">import time
+from functools import wraps
+
+def timed(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        start = time.time()
+        result = func(*args, **kwargs)
+        print(f"{func.__name__} took {time.time()-start:.4f}s")
+        return result
+    return wrapper
+
+@timed
+def slow_add(a, b):
+    return a + b
+
+slow_add(2, 3)</pre>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">7. A generator for memory-efficient ETL streaming (process a huge file line by line).</summary>
+              <pre class="etl-run-log" style="white-space:pre-wrap;margin-top:8px">def read_large_file(path):
+    with open(path) as f:
+        for line in f:
+            yield line.strip()
+
+# Only one line is ever in memory at a time, unlike f.readlines()
+# for row in read_large_file("huge.csv"):
+#     process(row)</pre>
+              <p style="font-size:12.5px;color:var(--ink3);margin-top:6px">Note: file I/O won't work in this browser sandbox (no filesystem access) — this is reference code to run in a real environment.</p>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">8. Implement the Singleton pattern.</summary>
+              <pre class="etl-run-log" style="white-space:pre-wrap;margin-top:8px">class Singleton:
+    _instance = None
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+
+a = Singleton()
+b = Singleton()
+print(a is b)  # True — same object</pre>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">9. Anomaly detection in a sales trend using pandas (simple z-score method).</summary>
+              <pre class="etl-run-log" style="white-space:pre-wrap;margin-top:8px">import pandas as pd
+
+def find_anomalies(df, col, threshold=2.5):
+    mean, std = df[col].mean(), df[col].std()
+    df["z_score"] = (df[col] - mean) / std
+    return df[df["z_score"].abs() > threshold]
+
+# anomalies = find_anomalies(df, "salary")
+# print(anomalies)</pre>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">10. Clean/preprocess a messy dataset — a reusable function.</summary>
+              <pre class="etl-run-log" style="white-space:pre-wrap;margin-top:8px">import pandas as pd
+
+def clean_df(df):
+    df = df.copy()
+    df.columns = [c.strip().lower().replace(" ", "_") for c in df.columns]
+    df = df.drop_duplicates()
+    df = df.dropna(how="all")
+    for c in df.select_dtypes(include="object").columns:
+        df[c] = df[c].str.strip()
+    return df
+
+# cleaned = clean_df(df)
+# print(cleaned.head())</pre>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">11. map vs flatMap — show the difference with a concrete example.</summary>
+              <pre class="etl-run-log" style="white-space:pre-wrap;margin-top:8px">words_per_line = [["hello", "world"], ["foo"]]
+
+# map keeps the nested structure
+mapped = list(map(lambda x: x, words_per_line))
+print(mapped)  # [['hello', 'world'], ['foo']]
+
+# flatMap-equivalent in plain Python (itertools.chain) flattens one level
+from itertools import chain
+flattened = list(chain.from_iterable(words_per_line))
+print(flattened)  # ['hello', 'world', 'foo']</pre>
+              <p style="font-size:12.5px;color:var(--ink3);margin-top:6px">Same distinction applies in Spark: <code>.map()</code> returns one output per input row (can be a list); <code>.flatMap()</code> flattens those lists into one long sequence of individual elements.</p>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">12. Implement a basic hash function and explain what "resizing" means for a hash table.</summary>
+              <pre class="etl-run-log" style="white-space:pre-wrap;margin-top:8px">def simple_hash(key, table_size):
+    return sum(ord(c) for c in str(key)) % table_size
+
+print(simple_hash("employee_42", 16))</pre>
+              <p style="font-size:12.5px;color:var(--ink3);margin-top:6px">Resizing: when a hash table gets too full (load factor exceeds a threshold, often ~0.7), it allocates a larger backing array and re-hashes every existing key into new bucket positions — because the bucket index depends on <code>hash(key) % table_size</code>, and table_size just changed. This is why hash table inserts are usually O(1) but occasionally O(n) during a resize.</p>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">13. @staticmethod vs @classmethod — a working example showing the actual behavioral difference.</summary>
+              <pre class="etl-run-log" style="white-space:pre-wrap;margin-top:8px">class Employee:
+    count = 0
+    def __init__(self, name):
+        self.name = name
+        Employee.count += 1
+
+    @staticmethod
+    def is_valid_name(name):
+        return isinstance(name, str) and len(name) > 0
+
+    @classmethod
+    def from_dict(cls, data):
+        return cls(data["name"])  # cls lets subclasses override correctly
+
+e = Employee.from_dict({"name": "Priya"})
+print(Employee.is_valid_name("Priya"))  # True — no access to class/instance needed</pre>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">14. Demonstrate the shallow vs deep copy gotcha with a nested list.</summary>
+              <pre class="etl-run-log" style="white-space:pre-wrap;margin-top:8px">import copy
+
+original = [[1, 2], [3, 4]]
+shallow = copy.copy(original)
+deep = copy.deepcopy(original)
+
+shallow[0][0] = 99  # mutates the SAME inner list original points to
+print(original)      # [[99, 2], [3, 4]] — original changed too!
+print(deep)           # [[1, 2], [3, 4]] — deep copy is fully independent</pre>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">15. Write a custom context manager (the __enter__/__exit__ pattern) for timing a block of code.</summary>
+              <pre class="etl-run-log" style="white-space:pre-wrap;margin-top:8px">import time
+
+class Timer:
+    def __enter__(self):
+        self.start = time.time()
+        return self
+    def __exit__(self, *args):
+        print(f"Elapsed: {time.time() - self.start:.4f}s")
+
+with Timer():
+    total = sum(range(1_000_000))</pre>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">16. Duck typing — show why Python doesn't need an interface/type check to call a shared method.</summary>
+              <pre class="etl-run-log" style="white-space:pre-wrap;margin-top:8px">class Duck:
+    def speak(self): return "Quack"
+class Dog:
+    def speak(self): return "Woof"
+
+def make_it_speak(animal):
+    return animal.speak()  # no type check — works if the method exists
+
+print(make_it_speak(Duck()))  # Quack
+print(make_it_speak(Dog()))   # Woof</pre>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">17. Multiple inheritance and MRO — a case where the resolution order actually matters.</summary>
+              <pre class="etl-run-log" style="white-space:pre-wrap;margin-top:8px">class A:
+    def greet(self): return "A"
+class B(A):
+    def greet(self): return "B"
+class C(A):
+    def greet(self): return "C"
+class D(B, C):
+    pass
+
+print(D().greet())     # "B" — MRO checks B before C
+print(D.__mro__)       # (D, B, C, A, object) — C3 linearization order</pre>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">18. Handle a corrupted/missing value in a batch ETL step without crashing the whole job.</summary>
+              <pre class="etl-run-log" style="white-space:pre-wrap;margin-top:8px">def safe_parse_amount(value, default=0.0):
+    try:
+        return float(value)
+    except (ValueError, TypeError):
+        return default
+
+raw_values = ["12.5", "N/A", None, "8.0", "garbage"]
+cleaned = [safe_parse_amount(v) for v in raw_values]
+print(cleaned)  # [12.5, 0.0, 0.0, 8.0, 0.0]</pre>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">19. Count unique words in a large body of text efficiently.</summary>
+              <pre class="etl-run-log" style="white-space:pre-wrap;margin-top:8px">from collections import Counter
+import re
+
+def unique_word_count(text):
+    words = re.findall(r"\b\w+\b", text.lower())
+    return len(Counter(words))
+
+print(unique_word_count("The quick brown fox. The fox ran."))  # 6</pre>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">20. What's the practical impact of the GIL, demonstrated — why does threading not speed up CPU-bound work?</summary>
+              <pre class="etl-run-log" style="white-space:pre-wrap;margin-top:8px">import time, threading
+
+def cpu_work():
+    total = 0
+    for i in range(20_000_000):
+        total += i
+
+# Single-threaded baseline
+start = time.time()
+cpu_work(); cpu_work()
+print("Sequential:", time.time() - start)
+
+# "Parallel" via threads — GIL means this is NOT actually faster for CPU-bound work
+start = time.time()
+t1 = threading.Thread(target=cpu_work)
+t2 = threading.Thread(target=cpu_work)
+t1.start(); t2.start(); t1.join(); t2.join()
+print("Threaded:", time.time() - start)  # roughly the same, sometimes slower</pre>
+              <p style="font-size:12.5px;color:var(--ink3);margin-top:6px">Note: this specific timing comparison may not run meaningfully inside the Pyodide sandbox above — it's here as reference code to run in a real Python environment where you can observe the GIL's effect directly. For real parallelism on CPU-bound work, use <code>multiprocessing</code> instead of <code>threading</code>.</p>
+            </details>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== PAGE: LEARN - DATA CLOUD ===== -->
+      <div class="page" id="page-learn-dc">
+        <h2 class="arch" style="font-size:22px;margin-bottom:6px">Learn: Salesforce Data Cloud</h2>
+        <p style="color:var(--ink3);font-size:14px;margin-bottom:18px">Data Cloud is SaaS-only — there's no in-browser way to execute it. This is reference material: the object model and how each concept maps to what you already know from SQL/PySpark/Databricks.</p>
+
+        <div class="card">
+          <div class="card-head" onclick="toggleCard('dcObjCard')"><h3>Core object model</h3><span class="toggle"></span></div>
+          <div class="card-body">
+            <table class="lrn-table" style="font-size:12.5px;width:100%">
+              <thead><tr><th>Data Cloud concept</th><th>What it is</th><th>Closest equivalent</th></tr></thead>
+              <tbody>
+                <tr><td><b>Data Stream</b></td><td>Ingests data from a source (Salesforce CRM, S3, ingestion API) into Data Cloud</td><td>Databricks Auto Loader / COPY INTO</td></tr>
+                <tr><td><b>Data Lake Object (DLO)</b></td><td>Raw ingested data, schema mostly as-is from source</td><td>Bronze layer / raw table</td></tr>
+                <tr><td><b>Data Model Object (DMO)</b></td><td>Mapped to Data Cloud's canonical schema so different sources can be joined</td><td>Silver/conformed layer, dimensional model</td></tr>
+                <tr><td><b>Calculated Insight</b></td><td>A metric computed across DMOs on a schedule (SQL-like definition)</td><td>SQL aggregation / Databricks Gold table</td></tr>
+                <tr><td><b>Identity Resolution</b></td><td>Rule-based matching to merge records into one Unified Individual</td><td>Fuzzy join / dedup logic</td></tr>
+                <tr><td><b>Segment</b></td><td>A filtered audience built from DMOs/Calculated Insights</td><td>WHERE clause / filtered view</td></tr>
+                <tr><td><b>Activation Target</b></td><td>Where a Segment gets pushed (Marketing Cloud, ad platform, webhook)</td><td>ETL "Output" node / API push</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head" onclick="toggleCard('dcFlowCard')"><h3>End-to-end flow</h3><span class="toggle"></span></div>
+          <div class="card-body">
+            <p style="font-size:13px;line-height:1.7">
+              1. <b>Data Stream</b> pulls data in (from Salesforce, cloud storage, or an ingestion API) → lands as a <b>DLO</b>.<br>
+              2. DLOs are mapped to <b>DMOs</b> against Data Cloud's canonical schema, so a "Contact" from Salesforce and a "Customer" from an e-commerce system land in the same shape.<br>
+              3. <b>Identity Resolution</b> rules merge DMO records that represent the same real person into a Unified Individual.<br>
+              4. <b>Calculated Insights</b> compute metrics (lifetime value, engagement score) across the unified data — this is the closest thing to writing SQL in Data Cloud, it uses a similar declarative syntax.<br>
+              5. A <b>Segment</b> filters the unified population down to a target audience.<br>
+              6. An <b>Activation Target</b> sends that segment somewhere it can be used (an ad platform, Marketing Cloud, a webhook to your own system).
+            </p>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head" onclick="toggleCard('dcIdCard')"><h3>Identity Resolution, deeper</h3><span class="toggle"></span></div>
+          <div class="card-body">
+            <p style="font-size:13px;color:var(--ink3);line-height:1.7">
+              An Identity Resolution ruleset has two parts: <b>match rules</b> (which fields make two records "the same person" — exact email match, or fuzzy name+phone) and <b>reconciliation rules</b> (when two matched records disagree on a field, which source wins — most recent, a priority order, most complete).<br>
+              Matches form a graph, not just pairs — if A matches B and B matches C, all three merge into one Unified Individual even if A and C never matched directly. This is the same transitive-closure problem as connected-components in graph theory.<br>
+              Runs in batch, not real-time — a new record isn't merged into its Unified Individual until the next Identity Resolution run completes.
+            </p>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head" onclick="toggleCard('dcIngestCard')"><h3>Ingestion & access patterns</h3><span class="toggle"></span></div>
+          <div class="card-body">
+            <table class="lrn-table" style="font-size:12.5px;width:100%">
+              <thead><tr><th>Pattern</th><th>Use case</th></tr></thead>
+              <tbody>
+                <tr><td><b>Salesforce CRM connector</b></td><td>Native, near-zero-config — Sales/Service Cloud objects flow in automatically</td></tr>
+                <tr><td><b>Cloud storage connector</b></td><td>S3/ADLS/GCS — batch files land as DLOs on a schedule</td></tr>
+                <tr><td><b>Ingestion API</b></td><td>Push data in from any system via REST — used for near-real-time or custom sources</td></tr>
+                <tr><td><b>Data Cloud Query API / Data Federation</b></td><td>Query Data Cloud data without copying it out — reads live, doesn't move data</td></tr>
+                <tr><td><b>Data Kits</b></td><td>Pre-built templates (partner-published) for standing up a common use case fast</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head" onclick="toggleCard('dcTemplateCard')"><h3>Calculated Insight template</h3><span class="toggle"></span></div>
+          <div class="card-body">
+            <p style="font-size:13px;color:var(--ink3);margin-bottom:8px">Data Cloud's Calculated Insight builder is visual, but underneath it's expressing something SQL-shaped. Example — "average order value per customer, last 90 days":</p>
+            <pre class="etl-run-log" style="white-space:pre-wrap">Calculated Insight: avg_order_value_90d
+  Source DMO: Order
+  Filter: Order.OrderDate >= NOW() - 90 DAYS
+  Group by: Order.UnifiedCustomerId__c
+  Measure: AVG(Order.TotalAmount__c)</pre>
+            <p style="font-size:13px;color:var(--ink3);margin-top:8px">SQL equivalent, for intuition:</p>
+            <pre class="etl-run-log" style="white-space:pre-wrap">SELECT unified_customer_id, AVG(total_amount) AS avg_order_value_90d
+FROM orders
+WHERE order_date >= CURRENT_DATE - 90
+GROUP BY unified_customer_id;</pre>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head" onclick="toggleCard('dcPracticeCard')"><h3>Practice questions (click to reveal answer)</h3><span class="toggle"></span></div>
+          <div class="card-body">
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">1. A customer exists in both Salesforce CRM and an e-commerce platform with slightly different names. How does Data Cloud know they're the same person?</summary>
+              <p style="font-size:13px;color:var(--ink3);line-height:1.6;margin-top:8px">Identity Resolution match rules — e.g. fuzzy match on (normalized name + phone) or exact match on email — merge both source DMO records into one Unified Individual. The two original records still exist as-is; the merge creates a link, it doesn't overwrite either source.</p>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">2. Two matched records disagree on "city" — Salesforce says Austin, the e-commerce system says Dallas. What decides the final value?</summary>
+              <p style="font-size:13px;color:var(--ink3);line-height:1.6;margin-top:8px">A reconciliation rule — commonly "most recently updated source wins," but it can also be a fixed source-priority order (e.g. always trust CRM over e-commerce) or "most complete record wins." This is configured per field, not globally.</p>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">3. Marketing wants "customers who spent over $500 in the last 90 days AND haven't opened an email in 30 days" pushed to an ad platform. Name the 3 Data Cloud objects involved, in order.</summary>
+              <p style="font-size:13px;color:var(--ink3);line-height:1.6;margin-top:8px">1) A <b>Calculated Insight</b> computing 90-day spend per customer. 2) A <b>Segment</b> filtering on that Calculated Insight + an engagement DMO field for email opens. 3) An <b>Activation Target</b> pointing at the ad platform, which the Segment gets pushed to.</p>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">4. Why can't you just query Data Cloud data live from an external BI tool the way you'd query a database?</summary>
+              <p style="font-size:13px;color:var(--ink3);line-height:1.6;margin-top:8px">You actually can — via the Data Cloud Query API or Data Federation, which reads live without copying data out. The distinction from a normal database: Data Cloud isn't primarily built for ad-hoc arbitrary SQL; its core workflows (Calculated Insights, Segments) are scheduled/batch, and federation is the escape hatch for real-time external querying.</p>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">5. A new order lands via the Ingestion API. How long until it's reflected in a customer's Unified Individual profile?</summary>
+              <p style="font-size:13px;color:var(--ink3);line-height:1.6;margin-top:8px">Not immediately — the raw record lands as a DLO right away, but it isn't merged into the Unified Individual until the next scheduled Identity Resolution run completes. This batch-not-realtime behavior is a common gotcha when someone expects Data Cloud to behave like a live transactional system.</p>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">6. What's the difference between a Data Lake Object and a Data Model Object, and why does Data Cloud need both?</summary>
+              <p style="font-size:13px;color:var(--ink3);line-height:1.6;margin-top:8px">A DLO holds raw ingested data close to its source shape — a Salesforce Contact DLO and a Shopify Customer DLO look nothing alike. A DMO maps both into Data Cloud's canonical schema (e.g. both become "Individual" records with the same field names), which is what makes cross-source joining, Identity Resolution, and Calculated Insights possible at all. Without the DMO layer, every source would need custom one-off logic to combine with every other source.</p>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">7. A Segment built last week now returns zero members. What would you check?</summary>
+              <p style="font-size:13px;color:var(--ink3);line-height:1.6;margin-top:8px">1) Did the underlying Calculated Insight or DMO it filters on stop refreshing (check its last-run status)? 2) Did an upstream Data Stream fail or pause? 3) Did the filter reference a field that got renamed/removed in a DMO update? 4) Is the Segment's publish schedule itself paused? Segments don't error loudly when their inputs go stale — they just quietly return fewer or zero members.</p>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">8. What's a Data Kit, and when would you use one instead of building from scratch?</summary>
+              <p style="font-size:13px;color:var(--ink3);line-height:1.6;margin-top:8px">A pre-built template (often partner-published) bundling DMOs, mappings, and sometimes Calculated Insights for a common use case (e.g. a specific industry's standard customer 360 model). Use one to stand up a proven structure fast instead of designing the object model from zero — then customize from there rather than starting blank.</p>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">9. Explain the difference between a Calculated Insight and a regular DMO field, with an example.</summary>
+              <p style="font-size:13px;color:var(--ink3);line-height:1.6;margin-top:8px">A DMO field is a direct, stored attribute from a source (e.g. Order.TotalAmount). A Calculated Insight is a computed metric, evaluated on a schedule, often aggregating across many rows (e.g. "average order value over the last 90 days" — this doesn't exist as a single field anywhere, it's derived). Calculated Insights are Data Cloud's closest equivalent to a SQL aggregation query, and they're what most Segments actually filter on.</p>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">10. Two source systems disagree on a customer's email — one has an old address, one has a new one, and neither timestamp is reliable. How do you handle it?</summary>
+              <p style="font-size:13px;color:var(--ink3);line-height:1.6;margin-top:8px">Without a trustworthy recency signal, fall back to a source-priority reconciliation rule instead of "most recent" — designate one system as the authoritative source for that field (e.g. always trust the CRM over a marketing tool for email). This is a common real-world case where "most recent" isn't actually available or trustworthy, so the ruleset needs an explicit fallback.</p>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">11. Why might the same physical person end up as two separate Unified Individuals?</summary>
+              <p style="font-size:13px;color:var(--ink3);line-height:1.6;margin-top:8px">Match rules didn't find enough overlap — e.g. they used a work email in one system and a personal email in another, with no phone/name match strong enough to link them. This is the mirror image of over-merging: too-loose rules wrongly combine different people, too-strict rules wrongly keep the same person split. Tuning match rules is a real precision/recall tradeoff, not a one-time setup.</p>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">12. Your company wants to activate a Segment to a channel Data Cloud doesn't have a native Activation Target for. What's the workaround?</summary>
+              <p style="font-size:13px;color:var(--ink3);line-height:1.6;margin-top:8px">Use the Ingestion/Query API pattern in reverse — export the Segment's membership via the Data Cloud Query API, then push it to the target channel yourself via that channel's own API (a custom integration). Native Activation Targets cover the common cases; anything outside that list needs this manual bridge.</p>
+            </details>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head" onclick="toggleCard('dcAdminCard')"><h3>Salesforce Administration — core concepts</h3><span class="toggle"></span></div>
+          <div class="card-body">
+            <table class="lrn-table" style="font-size:12.5px;width:100%">
+              <thead><tr><th>Concept</th><th>What it means</th></tr></thead>
+              <tbody>
+                <tr><td><b>Profile vs Permission Set</b></td><td>Profile = one required baseline of access per user (object/field/app permissions); Permission Set = additional, stackable grants on top, multiple per user</td></tr>
+                <tr><td><b>Role Hierarchy</b></td><td>Controls record-level visibility upward — a manager sees their subordinates' records by default, independent of sharing rules</td></tr>
+                <tr><td><b>OWD (Org-Wide Defaults)</b></td><td>The baseline/most-restrictive record access level per object (Private/Public Read Only/Public Read-Write) — sharing rules and roles only ever open access up from here, never restrict further</td></tr>
+                <tr><td><b>Sharing Rules</b></td><td>Opens up record access beyond OWD/role hierarchy — criteria-based or ownership-based, to specific roles/groups/public groups</td></tr>
+                <tr><td><b>Validation Rule</b></td><td>Declarative, blocks a save if a condition is true — no code, evaluated on insert/update</td></tr>
+                <tr><td><b>Workflow Rule / Process Builder / Flow</b></td><td>Workflow Rule = legacy, simple field-update/email on a trigger; Process Builder = deprecated, more complex; Flow = current, Salesforce's unified automation tool, replaces both</td></tr>
+                <tr><td><b>Record Type</b></td><td>Different picklist values / page layouts for the same object, based on business process (e.g. "Enterprise" vs "SMB" Opportunity)</td></tr>
+                <tr><td><b>Page Layout vs Lightning Record Page</b></td><td>Page Layout controls which fields/sections show (assignable per profile+record type); Lightning Record Page controls the broader UI arrangement including components, assignable per app/profile/record type/device</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head" onclick="toggleCard('dcAdminPracticeCard')"><h3>Salesforce Admin — practice questions (click to reveal answer)</h3><span class="toggle"></span></div>
+          <div class="card-body">
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">1. A user says they can't see a field on a record, even though their Profile has Edit access to that field. What else could be blocking it?</summary>
+              <p style="font-size:13px;color:var(--ink3);line-height:1.6;margin-top:8px">Field-Level Security exists at both the Profile AND any assigned Permission Sets — but also check the Page Layout assigned to that user's Profile+Record Type combo (a field can have FLS access but simply not be placed on the layout they're viewing), and whether it's a Lightning Record Page component visibility rule hiding it conditionally.</p>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">2. OWD for Opportunities is Private. A rep can't see their teammate's opportunity even though they're in the same role. Why might the role hierarchy not be helping here?</summary>
+              <p style="font-size:13px;color:var(--ink3);line-height:1.6;margin-top:8px">Role hierarchy grants visibility <i>upward</i> (a manager sees subordinates), not sideways between peers at the same level. Two reps in the same role don't automatically see each other's records — that needs an explicit sharing rule (e.g. a criteria-based or ownership-based sharing rule for that role/group) or a manual share.</p>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">3. When would you use a Validation Rule instead of a Flow to enforce a business rule?</summary>
+              <p style="font-size:13px;color:var(--ink3);line-height:1.6;margin-top:8px">Validation Rules are simpler, run synchronously at save time, and are the right tool for hard "block the save" logic (e.g. "Close Date can't be in the past"). Flow is better when the logic needs to do something beyond blocking — update other records, send notifications, or run multi-step logic. Reaching for Flow when a Validation Rule would do is unnecessary complexity.</p>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">4. What's the actual difference between a Permission Set and a Permission Set Group?</summary>
+              <p style="font-size:13px;color:var(--ink3);line-height:1.6;margin-top:8px">A Permission Set Group bundles multiple Permission Sets into one assignable unit — instead of assigning 5 separate Permission Sets to every new hire on a team, you assign one Permission Set Group. It also supports "muting" specific permissions from within the bundled sets, which individual Permission Sets can't do to each other.</p>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">5. A picklist field needs different values depending on whether the record is "Enterprise" or "SMB." How do you set that up?</summary>
+              <p style="font-size:13px;color:var(--ink3);line-height:1.6;margin-top:8px">Record Types + picklist value sets. Create two Record Types (Enterprise, SMB), then restrict which picklist values are available per Record Type on that field. Each Record Type can also have its own Page Layout, so the two processes can look and behave differently on the same object.</p>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">6. What happens to existing data if you change a field's data type, e.g. Text to Picklist?</summary>
+              <p style="font-size:13px;color:var(--ink3);line-height:1.6;margin-top:8px">Salesforce attempts to convert existing values automatically where it can (exact text matches become picklist values); anything that doesn't cleanly map may become blank or require manual review — this is a real risk in production, always test in a sandbox first and check the conversion preview Salesforce shows before confirming.</p>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">7. Explain the difference between a Public Group, a Queue, and a Role for sharing purposes.</summary>
+              <p style="font-size:13px;color:var(--ink3);line-height:1.6;margin-top:8px"><b>Role</b> — hierarchical, tied to org structure, grants upward visibility. <b>Public Group</b> — flat, arbitrary collection of users/roles/other groups, used as a sharing-rule target with no hierarchy implied. <b>Queue</b> — an object-specific holding area for unassigned records (e.g. unassigned Cases/Leads) that a group of users can pull from — it's about record ownership/routing, not just visibility.</p>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">8. A sandbox refresh just happened and several integrations broke. What's the most likely cause?</summary>
+              <p style="font-size:13px;color:var(--ink3);line-height:1.6;margin-top:8px">Sandbox refreshes typically reset/regenerate API keys, Named Credentials, and Connected App settings, and can overwrite sandbox-specific configuration with production values. Integration user credentials, OAuth tokens, and any sandbox-only endpoint overrides usually need to be reconfigured post-refresh — this is expected, not a bug.</p>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">9. What's the actual execution order when a record is saved (validation rules, triggers, workflow, etc.)?</summary>
+              <p style="font-size:13px;color:var(--ink3);line-height:1.6;margin-top:8px">Simplified: system validation (required fields, data types) → before-save Flows/triggers → custom Validation Rules → duplicate rules → save to database (assigns ID) → after-save triggers/Flows → assignment/auto-response rules → workflow rules and their immediate actions → escalation rules → entitlement rules → roll-up summary field recalculation on parent. Getting this wrong is a classic source of "why did the automation run twice" or "why didn't my validation catch this" bugs.</p>
+            </details>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== PAGE: LEARN - DATABRICKS ===== -->
+      <div class="page" id="page-learn-dbx">
+        <h2 class="arch" style="font-size:22px;margin-bottom:6px">Learn: Databricks</h2>
+        <p style="color:var(--ink3);font-size:14px;margin-bottom:18px">Architecture, Unity Catalog, and Delta Lake concepts. Where a concept is expressible as SQL, try it in Learn → SQL — this app's engine is SQLite, which shares enough syntax with Delta/Spark SQL for CTEs, window functions, and MERGE-style logic to be practiced directly.</p>
+
+        <div class="card">
+          <div class="card-head" onclick="toggleCard('dbxUcCard')"><h3>Unity Catalog hierarchy</h3><span class="toggle"></span></div>
+          <div class="card-body">
+            <p style="font-size:13px;line-height:1.7">
+              <b>Metastore</b> → <b>Catalog</b> → <b>Schema</b> (database) → <b>Table</b><br>
+              Three-level namespace: <code>catalog.schema.table</code>, e.g. <code>main.sales.orders</code>.<br>
+              Governance (GRANT/REVOKE, row filters, column masks, lineage) attaches at any level in this hierarchy.
+            </p>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head" onclick="toggleCard('dbxMedCard')"><h3>Medallion architecture</h3><span class="toggle"></span></div>
+          <div class="card-body">
+            <table class="lrn-table" style="font-size:12.5px;width:100%">
+              <thead><tr><th>Layer</th><th>Content</th><th>SQL analogy</th></tr></thead>
+              <tbody>
+                <tr><td><b>Bronze</b></td><td>Raw ingested data, as-is from source</td><td>Landing/staging table</td></tr>
+                <tr><td><b>Silver</b></td><td>Cleaned, conformed, deduplicated, joined</td><td>Cleaned + joined view</td></tr>
+                <tr><td><b>Gold</b></td><td>Business-level aggregates, ready for BI/reporting</td><td>Materialized aggregate table</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head" onclick="toggleCard('dbxDeltaCard')"><h3>Delta Lake essentials</h3><span class="toggle"></span></div>
+          <div class="card-body">
+            <p style="font-size:13px;line-height:1.7">
+              <b>ACID transactions</b> via a transaction log (<code>_delta_log</code>) — every write is atomic, so readers never see a half-finished write.<br>
+              <b>Time travel</b>: <code>SELECT * FROM t VERSION AS OF 3</code> or <code>TIMESTAMP AS OF '2024-01-01'</code> — query any prior table version.<br>
+              <b>Schema enforcement</b> (blocks mismatched writes) vs <b>schema evolution</b> (<code>mergeSchema</code>/<code>overwriteSchema</code> options that allow it) — two different, often-confused mechanisms.<br>
+              <b>MERGE INTO</b> is the core upsert primitive — powers SCD Type 2, CDC apply, and incremental loads.
+            </p>
+            <p style="font-size:13px;color:var(--ink3);margin-top:8px">Try the MERGE pattern conceptually in Learn → SQL (SQLite supports <code>INSERT ... ON CONFLICT</code> as its closest analogy — not identical syntax to Delta's MERGE INTO, but the same upsert logic).</p>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head" onclick="toggleCard('dbxCostCard')"><h3>Cost & cluster economics <span class="badge b-spark" style="background:rgba(201,138,63,.15);color:#c47f17">2026 interview focus</span></h3><span class="toggle"></span></div>
+          <div class="card-body">
+            <p style="font-size:13px;color:var(--ink3);line-height:1.7">
+              As of 2026, interviewers increasingly probe whether a candidate can own a workspace's <b>compute bill</b>, not just write clean transformations — this has become a real differentiator, not a nice-to-have.
+            </p>
+            <table class="lrn-table" style="font-size:12.5px;width:100%;margin-top:10px">
+              <thead><tr><th>Cost driver</th><th>Fix</th></tr></thead>
+              <tbody>
+                <tr><td>All-purpose cluster left running idle</td><td>Set auto-termination (e.g. 30-60 min idle); use job clusters for scheduled jobs, not interactive clusters</td></tr>
+                <tr><td>Full table rebuild every run instead of incremental</td><td>Switch to Delta MERGE for incremental upserts instead of overwrite-the-whole-table</td></tr>
+                <tr><td>Oversized driver / wrong instance mix</td><td>Right-size workers to the actual workload — bigger isn't automatically faster, and driver-only work doesn't need big workers</td></tr>
+                <tr><td>Photon disabled on SQL-heavy workloads</td><td>Enable Photon — often a large win for joins/aggregations with no code changes</td></tr>
+                <tr><td>Autoscaling misconfigured (min too high)</td><td>Tune min/max workers to match actual observed load, not guessed peak</td></tr>
+              </tbody>
+            </table>
+            <p style="font-size:13px;color:var(--ink3);line-height:1.6;margin-top:10px"><b>Real interview scenario pattern</b>: "Your Databricks spend tripled with no usage increase — diagnose it." The expected answer walks the table above as a checklist, not just naming one cause.</p>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head" onclick="toggleCard('dbxPhotonCard')"><h3>Photon</h3><span class="toggle"></span></div>
+          <div class="card-body">
+            <p style="font-size:13px;color:var(--ink3);line-height:1.7">
+              Photon is Databricks' vectorized C++ query engine that replaces parts of Spark's JVM execution layer for SQL and DataFrame workloads. It accelerates joins, aggregations, and projections roughly 2-3× on average. Enabled via a checkbox on SQL warehouses and clusters — no code changes required. Interviewers ask both "what is it" and "when would you enable it" (SQL/DataFrame-heavy workloads benefit most; it doesn't help RDD-level or UDF-heavy code, since Photon can't accelerate what it can't see into).
+            </p>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head" onclick="toggleCard('dbxCoInterviewCard')"><h3>Company interview patterns <span class="badge b-spark" style="background:rgba(201,138,63,.15);color:#c47f17">2026, from real candidate reports</span></h3><span class="toggle"></span></div>
+          <div class="card-body">
+            <table class="lrn-table" style="font-size:12.5px;width:100%">
+              <thead><tr><th>Company</th><th>Process</th><th>What's actually weighted</th></tr></thead>
+              <tbody>
+                <tr><td><b>Amazon</b></td><td>OA → phone screen (basic SQL) → 5 onsite rounds: data modeling, ETL architecture, coding/SQL, Bar Raiser</td><td>Data modeling is the real filter — expect to design a schema from scratch with heavy follow-ups. Leadership Principles get asked in <i>every</i> round, not just one — have 5-6 STAR stories ready. ETL round is mostly AWS service selection, not deep Spark internals.</td></tr>
+                <tr><td><b>Deloitte</b></td><td>2-3 rounds (2 technical + 1 HR), ~2 weeks total</td><td>Python, Databricks, SQL/databases, Azure. Communication and confidence in answers weighted alongside correctness — process moves fast, less depth-grinding than Amazon/Databricks itself.</td></tr>
+                <tr><td><b>Databricks (their own DE/SA roles)</b></td><td>5-6 stages, ~34-35 days average</td><td>Technical depth on Spark internals/Delta Lake/Lakehouse design weighted over raw coding-puzzle volume. Answers get tied back to their stated company values (customer obsession, first-principles thinking, bias for action) — a values-alignment layer on top of the technical bar. Field/Solutions roles include a live mock customer pitch, often the most pivotal stage.</td></tr>
+              </tbody>
+            </table>
+            <p style="font-size:13px;color:var(--ink3);line-height:1.6;margin-top:10px">Cross-company constant: SQL fundamentals (joins/aggregation/window functions/CTEs/predicate pushdown/partition pruning) and the PySpark optimization "big three" — AQE for skewed joins, broadcast joins for small dimension tables under ~10MB, partitioning fact tables by the most-filtered column — show up regardless of company.</p>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head" onclick="toggleCard('dbxPartCard')"><h3>Partitioning vs Bucketing vs Z-Order</h3><span class="toggle"></span></div>
+          <div class="card-body">
+            <table class="lrn-table" style="font-size:12.5px;width:100%">
+              <thead><tr><th>Technique</th><th>What it does</th><th>Best for</th></tr></thead>
+              <tbody>
+                <tr><td><b>Partitioning</b></td><td>Physical folders by a low/medium-cardinality column (e.g. date)</td><td>Columns frequently filtered on, with manageable distinct-value count</td></tr>
+                <tr><td><b>Bucketing</b></td><td>Fixed hash-based file count, regardless of value cardinality</td><td>High-cardinality join/aggregation keys — avoids the tiny-partition problem</td></tr>
+                <tr><td><b>Z-Ordering</b></td><td>Multi-dimensional co-location within files (Delta-specific)</td><td>Filtering on multiple non-partition columns at once</td></tr>
+              </tbody>
+            </table>
+            <p style="font-size:13px;color:var(--ink3);line-height:1.6;margin-top:10px">Common mistake: partitioning on a high-cardinality column (like a raw user ID) creates the "small file problem" — thousands of tiny partitions, each with a handful of rows, which kills read performance. That's exactly when bucketing or Z-order is the better fit.</p>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head" onclick="toggleCard('dbxCapCard')"><h3>Capacity planning math</h3><span class="toggle"></span></div>
+          <div class="card-body">
+            <p style="font-size:13px;color:var(--ink3);line-height:1.8">
+              <code>partitions ≈ data size / 128MB</code> (target partition size)<br>
+              <code>parallel task capacity = worker nodes × cores per node</code><br>
+              <code>execution waves = partitions / parallel task capacity</code><br>
+              <code>usable memory per executor ≈ (RAM per node × ~70%) / executors per node</code>
+            </p>
+            <p style="font-size:13px;color:var(--ink3);line-height:1.6;margin-top:10px">Worked example: 2GB of data, targeting 128MB partitions → ~16 partitions. A cluster with 4 worker nodes × 4 cores = 16 parallel task slots → all 16 partitions run in a single wave. Double the data with the same cluster → 2 waves, roughly double the wall-clock time for that stage.</p>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head" onclick="toggleCard('dbxStreamCard')"><h3>Streaming & workflows</h3><span class="toggle"></span></div>
+          <div class="card-body">
+            <p style="font-size:13px;color:var(--ink3);line-height:1.7">
+              <b>Structured Streaming</b> — micro-batch (or continuous) processing on the same DataFrame API as batch; checkpoints track progress so a restart resumes exactly where it left off, not from scratch.<br>
+              <b>Auto Loader</b> — incrementally and efficiently discovers new files landing in cloud storage, without listing the whole directory each run.<br>
+              <b>DLT (Delta Live Tables)</b> — declarative pipeline framework; define the target tables and their dependencies, DLT handles orchestration, and <b>expectations</b> (data quality rules) can warn, drop, or fail the pipeline per severity.<br>
+              <b>Workflows</b> — Databricks' job scheduler/orchestrator; tasks can pass values to each other and run on a schedule or trigger.<br>
+              <b>DABs (Databricks Asset Bundles)</b> — infrastructure-as-code for CI/CD of notebooks, jobs, and pipelines across dev/staging/prod.
+            </p>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head" onclick="toggleCard('dbxGovCard')"><h3>Governance</h3><span class="toggle"></span></div>
+          <div class="card-body">
+            <table class="lrn-table" style="font-size:12.5px;width:100%">
+              <thead><tr><th>Feature</th><th>Controls</th></tr></thead>
+              <tbody>
+                <tr><td><b>Row filters</b></td><td>Restrict which rows a user/role can see in a table</td></tr>
+                <tr><td><b>Column masks</b></td><td>Hide or transform specific column values per role (e.g. mask an SSN)</td></tr>
+                <tr><td><b>Lineage</b></td><td>Automatic tracking of which tables/columns feed which — visualized in Unity Catalog</td></tr>
+                <tr><td><b>External locations / Storage credentials</b></td><td>Replaces legacy DBFS mounts — governed, auditable cloud storage access</td></tr>
+                <tr><td><b>Volumes</b></td><td>Governed access to non-tabular files (images, PDFs, raw files) within Unity Catalog</td></tr>
+              </tbody>
+            </table>
+
+            <p style="font-size:13px;color:var(--ink3);margin-top:14px;margin-bottom:6px"><b>Row filter</b> — a SQL function that returns a boolean, applied automatically to every query against the table:</p>
+            <pre class="etl-run-log" style="white-space:pre-wrap">CREATE FUNCTION region_filter(region STRING)
+RETURN IF(IS_ACCOUNT_GROUP_MEMBER('admins'), true, region = current_user_region());
+
+ALTER TABLE sales.orders SET ROW FILTER region_filter ON (region);
+-- A non-admin querying sales.orders now only ever sees rows matching their own region,
+-- with no change needed to their query — the filter is invisible and non-bypassable.</pre>
+
+            <p style="font-size:13px;color:var(--ink3);margin-top:12px;margin-bottom:6px"><b>Column mask</b> — a SQL function applied to a specific column's returned value:</p>
+            <pre class="etl-run-log" style="white-space:pre-wrap">CREATE FUNCTION mask_ssn(ssn STRING)
+RETURN CASE WHEN IS_ACCOUNT_GROUP_MEMBER('hr_admins') THEN ssn
+            ELSE CONCAT('***-**-', RIGHT(ssn, 4)) END;
+
+ALTER TABLE employees.records ALTER COLUMN ssn SET MASK mask_ssn;
+-- hr_admins see the real SSN; everyone else sees ***-**-1234</pre>
+
+            <p style="font-size:13px;color:var(--ink3);margin-top:12px;margin-bottom:6px"><b>Lineage</b> — queryable directly via Unity Catalog's system tables, not just the UI graph:</p>
+            <pre class="etl-run-log" style="white-space:pre-wrap">SELECT source_table_full_name, target_table_full_name, source_type
+FROM system.access.table_lineage
+WHERE target_table_full_name = 'main.gold.revenue_summary'
+ORDER BY event_time DESC;</pre>
+
+            <p style="font-size:13px;color:var(--ink3);margin-top:12px;margin-bottom:6px"><b>Audit logging</b> — also a system table, queryable with plain SQL like anything else:</p>
+            <pre class="etl-run-log" style="white-space:pre-wrap">SELECT user_identity.email, action_name, request_params, event_time
+FROM system.access.audit
+WHERE action_name = 'deleteTable'
+  AND event_time >= current_date() - INTERVAL 7 DAYS
+ORDER BY event_time DESC;
+-- "who deleted what, when" — this is exactly the query an interviewer expects
+-- when asking how you'd investigate an incident after the fact.</pre>
+
+            <p style="font-size:13px;color:var(--ink3);margin-top:12px;margin-bottom:6px"><b>Grant access</b> — this is what "account-level, not per-workspace" means in practice: one GRANT, enforced everywhere the object is reachable:</p>
+            <pre class="etl-run-log" style="white-space:pre-wrap">GRANT SELECT ON TABLE main.gold.revenue_summary TO `analytics_team`;
+GRANT USE CATALOG ON CATALOG main TO `analytics_team`;
+-- Unlike per-workspace ACLs, this one grant is enforced identically regardless
+-- of which workspace, cluster, or SQL warehouse someone queries it from.</pre>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head" onclick="toggleCard('dbxPracticeCard')"><h3>Practice questions (click to reveal answer)</h3><span class="toggle"></span></div>
+          <div class="card-body">
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">1. A Gold dashboard number suddenly looks wrong. Walk through your diagnosis, in order.</summary>
+              <p style="font-size:13px;color:var(--ink3);line-height:1.6;margin-top:8px">1) Check DESCRIBE HISTORY on the Gold table — was there an unexpected write/overwrite? 2) Trace lineage backward through Silver to Bronze — did an upstream schema change silently drop or nullify a column? 3) Check the job run history — did the pipeline actually run, or fail silently and serve stale data? 4) If Gold is a MERGE-based incremental table, check for a non-idempotent write (re-running the same batch twice without dedup logic would double-count).</p>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">2. Someone accidentally dropped a managed table. Can you get it back?</summary>
+              <p style="font-size:13px;color:var(--ink3);line-height:1.6;margin-top:8px">If it's Delta and within the VACUUM retention window (default 7 days), the data files still exist — you can restore via <code>RESTORE TABLE t TO VERSION AS OF n</code> if the metadata/history is intact, or by recreating the table pointing at the old data path if the catalog entry itself was dropped. This is exactly why VACUUM's retention period is a real tradeoff, not just disk-space hygiene — shortening it trades safety for storage cost.</p>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">3. Two jobs both MERGE into the same Delta table at the same time and one fails with a concurrency exception. Why, and how do you avoid it?</summary>
+              <p style="font-size:13px;color:var(--ink3);line-height:1.6;margin-top:8px">Delta uses optimistic concurrency control — both writers assume no conflict, and if their target row ranges actually overlap, the loser fails at commit time rather than silently corrupting data. Fix: don't run overlapping MERGE jobs against the same table concurrently; serialize them, or partition the work so each job's write range genuinely can't overlap the other's.</p>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">4. Your Databricks bill doubled this month with no obvious usage increase. What do you check?</summary>
+              <p style="font-size:13px;color:var(--ink3);line-height:1.6;margin-top:8px">Common culprits: a job stuck in an all-purpose (interactive) cluster instead of a cheaper job cluster; auto-scaling misconfigured so clusters over-provision; a cluster left running idle (no auto-termination set); a query regression causing full-table scans where partition pruning used to apply; or a new streaming job with checkpoints creating cluster churn.</p>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">5. Design an end-to-end pipeline: raw JSON events land in cloud storage every few minutes, need to reach a queryable Gold table with data quality checks.</summary>
+              <p style="font-size:13px;color:var(--ink3);line-height:1.6;margin-top:8px">Auto Loader ingests new files incrementally into Bronze (raw, as-is). A DLT pipeline (or scheduled job) cleans/conforms into Silver, with <b>expectations</b> to warn/drop/fail on bad records (e.g. malformed JSON, missing required fields) at a chosen severity. A final aggregation step produces Gold. Orchestrate the whole thing as a Databricks Workflow with task dependencies, scheduled or triggered by new-file arrival.</p>
+            </details>
+            <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:500">6. What's the difference between schema enforcement failing and schema evolution succeeding — same underlying mismatch, different outcome. Why?</summary>
+              <p style="font-size:13px;color:var(--ink3);line-height:1.6;margin-top:8px">By default, Delta rejects a write whose schema doesn't match the target table (enforcement) — this protects existing consumers from a surprise structural change. If you explicitly opt in with <code>mergeSchema</code> (add new columns) or <code>overwriteSchema</code> (replace schema entirely) as write options, the same mismatch is allowed through instead. It's the same mechanism, gated by an explicit flag — never silent by default.</p>
+            </details>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== PAGE: LEARN - CROSS-MAP ===== -->
+      <div class="page" id="page-learn-map">
+        <h2 class="arch" style="font-size:22px;margin-bottom:6px">Cross-Map</h2>
+        <p style="color:var(--ink3);font-size:14px;margin-bottom:18px">Same operation, five implementations with real syntax — not just concept names. SQL, PySpark(-shim), and Python all execute for real in the Learn tabs above; Data Cloud and Databricks are reference-only (SaaS/cluster-only, can't run in-browser).</p>
+
+        <div class="card">
+          <div class="card-head" onclick="toggleCard('cmPipelineCard')"><h3>Pipeline stages (overview)</h3><span class="toggle"></span></div>
+          <div class="card-body" style="overflow-x:auto">
+          <table class="lrn-table" style="font-size:12.5px">
+            <thead><tr><th>Stage</th><th>SQL</th><th>PySpark</th><th>Python/pandas</th><th>Data Cloud</th><th>Databricks</th></tr></thead>
+            <tbody>
+              <tr><td>Ingest</td><td>SELECT / COPY INTO</td><td>spark.read / .table()</td><td>pd.read_csv</td><td>Data Stream</td><td>Auto Loader</td></tr>
+              <tr><td>Clean</td><td>CASE / NULLIF / CAST</td><td>withColumn + when</td><td>.apply / .fillna</td><td>Transform</td><td>Delta MERGE</td></tr>
+              <tr><td>Aggregate</td><td>GROUP BY / window fns</td><td>.groupBy().agg() / Window</td><td>.groupby() / .rolling()</td><td>Calculated Insight</td><td>Delta table</td></tr>
+              <tr><td>Model/Join</td><td>JOIN types</td><td>.join()</td><td>pd.merge</td><td>Identity Resolution</td><td>star schema</td></tr>
+              <tr><td>Activate</td><td>VIEW / export</td><td>.write.format()</td><td>.to_csv / API</td><td>Activation Target</td><td>Delta Sharing</td></tr>
+            </tbody>
+          </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head" onclick="toggleCard('cmFilterCard')"><h3>Filtering</h3><span class="toggle"></span></div>
+          <div class="card-body" style="overflow-x:auto">
+          <table class="lrn-table" style="font-size:12px">
+            <tbody>
+              <tr><td><b>SQL</b></td><td><code>SELECT * FROM t WHERE salary > 5000</code></td></tr>
+              <tr><td><b>PySpark</b></td><td><code>df.filter("salary > 5000")</code> or <code>df.filter(F.col("salary") > 5000)</code></td></tr>
+              <tr><td><b>Python/pandas</b></td><td><code>df[df["salary"] > 5000]</code></td></tr>
+              <tr><td><b>Data Cloud</b></td><td>Segment filter condition on a DMO/Calculated Insight field</td></tr>
+              <tr><td><b>Databricks</b></td><td>Same as SQL — Spark SQL, or a Row Filter function for governed automatic filtering</td></tr>
+            </tbody>
+          </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head" onclick="toggleCard('cmDedupeCard')"><h3>Deduplication (keep latest per key)</h3><span class="toggle"></span></div>
+          <div class="card-body" style="overflow-x:auto">
+          <table class="lrn-table" style="font-size:12px">
+            <tbody>
+              <tr><td><b>SQL</b></td><td><pre class="etl-run-log" style="white-space:pre-wrap;margin:0">WITH r AS (SELECT *, ROW_NUMBER() OVER (PARTITION BY id ORDER BY updated_at DESC) rn FROM t)
+SELECT * FROM r WHERE rn = 1;</pre></td></tr>
+              <tr><td><b>PySpark</b></td><td><pre class="etl-run-log" style="white-space:pre-wrap;margin:0">w = Window.partitionBy("id").orderBy(F.desc("updated_at"))
+df.withColumn("rn", F.row_number().over(w)).filter("rn = 1")</pre></td></tr>
+              <tr><td><b>Python/pandas</b></td><td><code>df.sort_values("updated_at").drop_duplicates("id", keep="last")</code></td></tr>
+              <tr><td><b>Data Cloud</b></td><td>Identity Resolution reconciliation rule ("most recently updated source wins")</td></tr>
+              <tr><td><b>Databricks</b></td><td>Same ROW_NUMBER pattern as SQL, or a Delta MERGE that only inserts/updates the winning row</td></tr>
+            </tbody>
+          </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head" onclick="toggleCard('cmUpsertCard')"><h3>Upsert / SCD Type 2</h3><span class="toggle"></span></div>
+          <div class="card-body" style="overflow-x:auto">
+          <table class="lrn-table" style="font-size:12px">
+            <tbody>
+              <tr><td><b>SQL (Delta)</b></td><td><code>MERGE INTO target USING src ON target.id = src.id WHEN MATCHED THEN UPDATE SET * WHEN NOT MATCHED THEN INSERT *</code></td></tr>
+              <tr><td><b>PySpark</b></td><td><code>DeltaTable.forName(spark,"t").alias("t").merge(src,"t.id=s.id").whenMatchedUpdateAll().whenNotMatchedInsertAll().execute()</code></td></tr>
+              <tr><td><b>Python/pandas</b></td><td>No native MERGE — simulate: <code>pd.concat([old[~old.id.isin(new.id)], new])</code></td></tr>
+              <tr><td><b>Data Cloud</b></td><td>Not directly exposed — Identity Resolution + reconciliation rules serve a similar "combine old + new" role at the record level</td></tr>
+              <tr><td><b>Databricks</b></td><td>MERGE INTO is native and is THE upsert primitive — powers SCD2, CDC apply, incremental loads</td></tr>
+            </tbody>
+          </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head" onclick="toggleCard('cmWindowCard')"><h3>Window functions / ranking</h3><span class="toggle"></span></div>
+          <div class="card-body" style="overflow-x:auto">
+          <table class="lrn-table" style="font-size:12px">
+            <tbody>
+              <tr><td><b>SQL</b></td><td><code>RANK() OVER (PARTITION BY dept ORDER BY salary DESC)</code></td></tr>
+              <tr><td><b>PySpark</b></td><td><code>F.rank().over(Window.partitionBy("dept").orderBy(F.desc("salary")))</code></td></tr>
+              <tr><td><b>Python/pandas</b></td><td><code>df.groupby("dept")["salary"].rank(method="min", ascending=False)</code></td></tr>
+              <tr><td><b>Data Cloud</b></td><td>No direct equivalent — would need to export via Query API and rank downstream</td></tr>
+              <tr><td><b>Databricks</b></td><td>Identical to SQL/PySpark — same Spark SQL engine underneath</td></tr>
+            </tbody>
+          </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head" onclick="toggleCard('cmJoinCard')"><h3>Joins</h3><span class="toggle"></span></div>
+          <div class="card-body" style="overflow-x:auto">
+          <table class="lrn-table" style="font-size:12px">
+            <tbody>
+              <tr><td><b>SQL</b></td><td><code>SELECT * FROM a JOIN b ON a.id = b.id</code> (INNER/LEFT/RIGHT/FULL/SELF/CROSS)</td></tr>
+              <tr><td><b>PySpark</b></td><td><code>a.join(b, on="id", how="left")</code> — add <code>F.broadcast(b)</code> if b is small</td></tr>
+              <tr><td><b>Python/pandas</b></td><td><code>pd.merge(a, b, on="id", how="left")</code></td></tr>
+              <tr><td><b>Data Cloud</b></td><td>Cross-DMO relationships are configured in the data model, then Identity Resolution links matching records — not an ad-hoc JOIN clause</td></tr>
+              <tr><td><b>Databricks</b></td><td>Identical to SQL/PySpark, plus broadcast-join hints and star-schema-aware join planning via AQE</td></tr>
+            </tbody>
+          </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head" onclick="toggleCard('cmAggCard')"><h3>Aggregation</h3><span class="toggle"></span></div>
+          <div class="card-body" style="overflow-x:auto">
+          <table class="lrn-table" style="font-size:12px">
+            <tbody>
+              <tr><td><b>SQL</b></td><td><code>SELECT dept, AVG(salary) FROM t GROUP BY dept</code></td></tr>
+              <tr><td><b>PySpark</b></td><td><code>df.groupBy("dept").agg(F.avg("salary"))</code></td></tr>
+              <tr><td><b>Python/pandas</b></td><td><code>df.groupby("dept")["salary"].mean()</code></td></tr>
+              <tr><td><b>Data Cloud</b></td><td>Calculated Insight with a Group By + Measure definition</td></tr>
+              <tr><td><b>Databricks</b></td><td>Identical to SQL/PySpark; typically materialized as a Gold table</td></tr>
+            </tbody>
+          </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head" onclick="toggleCard('cmTypeCard')"><h3>Schema / type handling</h3><span class="toggle"></span></div>
+          <div class="card-body" style="overflow-x:auto">
+          <table class="lrn-table" style="font-size:12px">
+            <tbody>
+              <tr><td><b>SQL</b></td><td><code>CAST(col AS INTEGER)</code>, table DDL with explicit column types</td></tr>
+              <tr><td><b>PySpark</b></td><td><code>StructType([StructField("id", IntegerType())])</code> on read, or <code>.cast("int")</code></td></tr>
+              <tr><td><b>Python/pandas</b></td><td><code>pd.to_numeric(df["id"], errors="coerce")</code>, <code>df.astype({"id":"int"})</code></td></tr>
+              <tr><td><b>Data Cloud</b></td><td>DMO field data types set at mapping time (Text/Number/Date/etc.)</td></tr>
+              <tr><td><b>Databricks</b></td><td>Delta schema enforcement (blocks mismatches) vs schema evolution (<code>mergeSchema</code>/<code>overwriteSchema</code> to allow them)</td></tr>
+            </tbody>
+          </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head" onclick="toggleCard('cmNullCard')"><h3>Null handling</h3><span class="toggle"></span></div>
+          <div class="card-body" style="overflow-x:auto">
+          <table class="lrn-table" style="font-size:12px">
+            <tbody>
+              <tr><td><b>SQL</b></td><td><code>COALESCE(col, 0)</code>, <code>WHERE col IS NULL</code></td></tr>
+              <tr><td><b>PySpark</b></td><td><code>df.fillna(0, subset=["col"])</code>, <code>df.filter(F.col("col").isNull())</code></td></tr>
+              <tr><td><b>Python/pandas</b></td><td><code>df["col"].fillna(0)</code>, <code>df[df["col"].isna()]</code></td></tr>
+              <tr><td><b>Data Cloud</b></td><td>Transform step in the ingestion pipeline, or a default value on the DMO field mapping</td></tr>
+              <tr><td><b>Databricks</b></td><td>Same as SQL; the literal-text <code>"NULL"</code>-as-a-string trap (vs a real NULL) is a very common real-dataset gotcha</td></tr>
+            </tbody>
+          </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head" onclick="toggleCard('cmStreamCard')"><h3>Streaming / incremental processing</h3><span class="toggle"></span></div>
+          <div class="card-body" style="overflow-x:auto">
+          <table class="lrn-table" style="font-size:12px">
+            <tbody>
+              <tr><td><b>SQL</b></td><td>Not applicable directly — streaming is expressed via the engine's API (Spark Structured Streaming), not raw SQL clauses</td></tr>
+              <tr><td><b>PySpark</b></td><td><code>spark.readStream.format("cloudFiles")...writeStream...trigger(processingTime="1 minute")</code></td></tr>
+              <tr><td><b>Python/pandas</b></td><td>No native streaming model — pandas is in-memory/batch by design</td></tr>
+              <tr><td><b>Data Cloud</b></td><td>Ingestion API for near-real-time; Identity Resolution/Calculated Insights still run on a schedule (batch), not live</td></tr>
+              <tr><td><b>Databricks</b></td><td>Structured Streaming + Auto Loader + DLT, with checkpointing for exactly-once semantics</td></tr>
+            </tbody>
+          </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head" onclick="toggleCard('cmSecCard')"><h3>Security / access control</h3><span class="toggle"></span></div>
+          <div class="card-body" style="overflow-x:auto">
+          <table class="lrn-table" style="font-size:12px">
+            <tbody>
+              <tr><td><b>SQL</b></td><td><code>GRANT SELECT ON t TO role</code> (standard ANSI SQL DCL)</td></tr>
+              <tr><td><b>PySpark</b></td><td>No access-control layer of its own — inherits whatever the underlying catalog (e.g. Unity Catalog) enforces</td></tr>
+              <tr><td><b>Python/pandas</b></td><td>None — pandas has no concept of row/column-level security; access control is the surrounding system's job</td></tr>
+              <tr><td><b>Data Cloud</b></td><td>Salesforce-style sharing rules/profiles/permission sets govern who can build/view Segments and Calculated Insights</td></tr>
+              <tr><td><b>Databricks</b></td><td>Unity Catalog: GRANT/REVOKE, Row Filters, Column Masks — all account-level, not per-workspace</td></tr>
+            </tbody>
+          </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head" onclick="toggleCard('cmPerfCard')"><h3>Performance / scale mechanisms</h3><span class="toggle"></span></div>
+          <div class="card-body" style="overflow-x:auto">
+          <table class="lrn-table" style="font-size:12px">
+            <tbody>
+              <tr><td><b>SQL (generic RDBMS)</b></td><td>B-tree/covering indexes, query planner statistics</td></tr>
+              <tr><td><b>PySpark</b></td><td>Partitioning, broadcast joins, AQE, caching, salting for skew</td></tr>
+              <tr><td><b>Python/pandas</b></td><td>Vectorized operations over row-by-row loops; chunked reads for large files (no distributed execution)</td></tr>
+              <tr><td><b>Data Cloud</b></td><td>Not user-tunable — Data Cloud manages its own scaling internally</td></tr>
+              <tr><td><b>Databricks</b></td><td>Z-Ordering, OPTIMIZE/compaction, Photon, Liquid Clustering, data skipping via file-level stats</td></tr>
+            </tbody>
+          </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head" onclick="toggleCard('cmErrCard')"><h3>Error / bad-record handling</h3><span class="toggle"></span></div>
+          <div class="card-body" style="overflow-x:auto">
+          <table class="lrn-table" style="font-size:12px">
+            <tbody>
+              <tr><td><b>SQL</b></td><td><code>TRY_CAST(col AS INT)</code> — returns NULL instead of erroring on a bad value</td></tr>
+              <tr><td><b>PySpark</b></td><td>Read modes: <code>PERMISSIVE</code> (default, nulls+_corrupt_record), <code>DROPMALFORMED</code>, <code>FAILFAST</code></td></tr>
+              <tr><td><b>Python/pandas</b></td><td><code>pd.to_numeric(col, errors="coerce")</code>, try/except around row-level parsing</td></tr>
+              <tr><td><b>Data Cloud</b></td><td>Data Stream ingestion errors surface in the Data Stream's run history/logs</td></tr>
+              <tr><td><b>Databricks</b></td><td>Same PERMISSIVE/DROPMALFORMED/FAILFAST modes as PySpark, plus DLT expectations (warn/drop/fail per severity)</td></tr>
+            </tbody>
+          </table>
+          </div>
+        </div>
+      </div>
+
       <!-- ===== PAGE: SETTINGS ===== -->
       <div class="page" id="page-settings">
         <h2 class="arch" style="font-size:22px;margin-bottom:16px">Settings</h2>
@@ -698,8 +2258,9 @@ td.null{color:var(--bad);background:var(--bad-bg);font-style:italic}
     <div class="dock-head">
       <div class="dock-head-left">
         <div class="dock-head-title">Command chat</div>
-        <div class="dock-head-sub">SQL · PySpark · Python · transforms · type "help"</div>
+        <div class="dock-head-sub" id="dockSub">SQL · PySpark · Python · transforms · type "help"</div>
       </div>
+      <button class="dock-close" id="aiModeBtn" onclick="toggleAiMode()" style="font-size:11px;padding:4px 8px;border-radius:6px;background:var(--bg2);color:var(--ink2)" title="Load a small local AI model for open-ended questions — no API key, no server, runs fully in your browser. One-time ~1GB download.">✨ AI mode</button>
       <button class="dock-close" onclick="document.getElementById('dock').classList.remove('open')">—</button>
     </div>
     <div class="dock-log" id="cmdLog"><p class="ls">Ready. Type "help" or tap a suggestion.</p></div>
@@ -719,6 +2280,14 @@ td.null{color:var(--bad);background:var(--bad-bg);font-style:italic}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.js"></script>
+<script src="https://cdn.jsdelivr.net/pyodide/v0.26.1/full/pyodide.js"></script>
+<script type="module">
+  // WebLLM is an ES module — imported lazily only when the user clicks "AI mode",
+  // never on page load, since the model is a multi-hundred-MB to ~1GB download.
+  window._loadWebLLM = async function(){
+    return await import('https://esm.run/@mlc-ai/web-llm');
+  };
+</script>
 <script>
 'use strict';
 /* ============================================================
@@ -741,7 +2310,7 @@ function fmtNum(x){if(x==null||!isFinite(x))return'—';return Math.abs(x)>=1000
 function debounce(fn,ms){var t;return function(){clearTimeout(t);var a=arguments,c=this;t=setTimeout(function(){fn.apply(c,a)},ms)}}
 
 /* ============================================================
-   AUTH — credential check now happens server-side (see /api/login.js, /api/verify.js,
+   AUTH — credential check happens server-side (see /api/login.js, /api/verify.js,
    /api/logout.js). No username, password, or hash lives in this file anymore; the
    session is an HttpOnly cookie the browser can't even read via JS.
 ============================================================ */
@@ -1264,6 +2833,201 @@ function sqliteExecToRows(res){
 }
 /* --------------------------------------------------------------------------- */
 
+/* ============================================================
+   LEARN: SQL — reuses buildSqliteDB()/buildAlaDB()/needsSqlite() above, so
+   window functions/CTEs work the same way here as in the main SQL panel.
+============================================================ */
+async function lrnRunSql(boxId,outId){
+  if(!S.datasets.length){alert('Load a dataset first (Datasets page).');return}
+  var raw=$i(boxId).value.trim();if(!raw)return;
+  var q=raw.replace(/\{table\}/g, ds().name);
+  var out=$i(outId);
+  out.innerHTML='<tr><td style="padding:8px;color:var(--ink3)">Running…</td></tr>';
+  try{
+    var fields,rows;
+    if(needsSqlite(q)){
+      var sdb=await buildSqliteDB();var sres=sdb.exec(q);var res=sqliteExecToRows(sres);
+      if(!res.rows.length)throw new Error('Query returned 0 rows.');
+      fields=res.fields;rows=res.rows;
+    }else{
+      var db=buildAlaDB();var ares=db.exec(q);
+      if(!Array.isArray(ares)||!ares.length)throw new Error('Query returned 0 rows.');
+      fields=[];ares.slice(0,200).forEach(function(o){Object.keys(o).forEach(function(k){if(fields.indexOf(k)===-1)fields.push(k)})});
+      rows=ares.map(function(o){var r={};fields.forEach(function(f){var v=o[f];r[f]=v==null?'':String(v)});return r});
+    }
+    var thead='<thead><tr>'+fields.map(function(f){return'<th>'+esc(f)+'</th>'}).join('')+'</tr></thead>';
+    var body=rows.slice(0,100).map(function(r){return'<tr>'+fields.map(function(f){return'<td>'+esc(r[f])+'</td>'}).join('')+'</tr>'}).join('');
+    out.innerHTML=thead+'<tbody>'+body+'</tbody>';
+  }catch(e){
+    out.innerHTML='<tr><td style="padding:8px;color:var(--bad)">Error: '+esc(e.message||e)+'</td></tr>';
+  }
+}
+
+/* ============================================================
+   LEARN: Python + PySpark-shim, via Pyodide (real CPython/WASM).
+   PySpark itself needs a JVM cluster and cannot run in-browser — the
+   PySparkShim class below is a small pandas-backed stand-in that supports
+   the common API surface (spark.table, filter, groupBy().agg(), withColumn,
+   join, orderBy, limit, show) so syntax practice is real, even though
+   execution underneath is pandas, not a real Spark job. This distinction is
+   stated to the user in the page copy — never presented as real Spark.
+============================================================ */
+var pyodideInstance=null, pyodideLoading=null;
+var PYSPARK_SHIM_PY = `
+import pandas as pd
+
+class _PySparkDF:
+    def __init__(self, pdf):
+        self._pdf = pdf
+    def filter(self, cond):
+        return _PySparkDF(self._pdf.query(cond))
+    def where(self, cond):
+        return self.filter(cond)
+    def select(self, *cols):
+        cols = cols[0] if len(cols)==1 and isinstance(cols[0], list) else list(cols)
+        return _PySparkDF(self._pdf[cols])
+    def withColumn(self, name, series_or_val):
+        out = self._pdf.copy()
+        out[name] = series_or_val
+        return _PySparkDF(out)
+    def groupBy(self, *cols):
+        cols = cols[0] if len(cols)==1 and isinstance(cols[0], list) else list(cols)
+        return _PySparkGrouped(self._pdf, cols)
+    def orderBy(self, *cols, ascending=True):
+        cols = cols[0] if len(cols)==1 and isinstance(cols[0], list) else list(cols)
+        return _PySparkDF(self._pdf.sort_values(list(cols), ascending=ascending))
+    def limit(self, n):
+        return _PySparkDF(self._pdf.head(n))
+    def join(self, other, on=None, how="inner"):
+        return _PySparkDF(self._pdf.merge(other._pdf, on=on, how=how))
+    def toPandas(self):
+        return self._pdf
+    def show(self, n=20):
+        print(self._pdf.head(n).to_string(index=False))
+    def count(self):
+        return len(self._pdf)
+
+class _PySparkGrouped:
+    def __init__(self, pdf, cols):
+        self._pdf = pdf; self._cols = cols
+    def agg(self, spec):
+        return _PySparkDF(self._pdf.groupby(self._cols).agg(spec).reset_index())
+    def count(self):
+        return _PySparkDF(self._pdf.groupby(self._cols).size().reset_index(name="count"))
+
+class _SparkSession:
+    def __init__(self, tables):
+        self._tables = tables
+    def table(self, name):
+        if name not in self._tables:
+            raise ValueError(f'No loaded dataset named "{name}" — check the Datasets page tab name.')
+        return _PySparkDF(self._tables[name])
+
+def _make_spark(tables_dict):
+    return _SparkSession(tables_dict)
+`;
+async function getPyodide(){
+  if(pyodideInstance)return pyodideInstance;
+  if(!pyodideLoading){
+    pyodideLoading = loadPyodide().then(async function(py){
+      await py.loadPackage('pandas');
+      py.runPython(PYSPARK_SHIM_PY);
+      pyodideInstance = py;
+      return py;
+    });
+  }
+  return pyodideLoading;
+}
+function markPyReady(){
+  ['lrnPyStatus','lrnPy2Status'].forEach(function(id){var el=$i(id);if(el){el.textContent='✓ Python runtime ready';}});
+  ['lrnPysparkRun','lrnPythonRun'].forEach(function(id){var el=$i(id);if(el)el.disabled=false;});
+}
+// Kick off loading as soon as the page module is parsed — no need to wait for nav click.
+getPyodide().then(markPyReady).catch(function(e){
+  ['lrnPyStatus','lrnPy2Status'].forEach(function(id){var el=$i(id);if(el)el.textContent='⚠ Runtime failed to load: '+e.message;});
+});
+
+function datasetsToJson(){
+  var obj={};
+  S.datasets.forEach(function(d){
+    obj[d.name] = d.rows.map(function(r){var o={};d.fields.forEach(function(f){var v=r[f];o[f]=isNull(v)?null:v;});return o;});
+  });
+  return obj;
+}
+async function lrnRunPython(){
+  var out=$i('lrnPythonOut');
+  if(!S.datasets.length){out.textContent='Load a dataset first (Datasets page).';return}
+  out.textContent='Running…';
+  try{
+    var py=await getPyodide();
+    var code=$i('lrnPythonBox').value;
+    py.globals.set('_active_json', JSON.stringify(ds().rows.map(function(r){var o={};ds().fields.forEach(function(f){o[f]=r[f];});return o;})));
+    py.globals.set('_all_json', JSON.stringify(datasetsToJson()));
+    py.runPython(`
+import pandas as pd, json
+df = pd.DataFrame(json.loads(_active_json))
+for c in df.columns:
+    df[c] = pd.to_numeric(df[c], errors="ignore")
+_all_raw = json.loads(_all_json)
+tables = {}
+for _name, _rows in _all_raw.items():
+    _t = pd.DataFrame(_rows)
+    for _c in _t.columns:
+        _t[_c] = pd.to_numeric(_t[_c], errors="ignore")
+    tables[_name] = _t
+`);
+    var captured = py.runPython(`
+import sys, io
+_buf = io.StringIO()
+_old = sys.stdout
+sys.stdout = _buf
+try:
+    exec(${JSON.stringify(code)})
+finally:
+    sys.stdout = _old
+_buf.getvalue()
+`);
+    out.textContent = captured || '(no output — use print() to see results)';
+  }catch(e){
+    var _msg=e.message||String(e); var _hint=explainError(_msg); out.textContent = 'Error: ' + _msg + (_hint?'\n\n'+_hint:'');
+  }
+}
+async function lrnRunPyspark(){
+  var out=$i('lrnPysparkOut');
+  if(!S.datasets.length){out.textContent='Load a dataset first (Datasets page).';return}
+  out.textContent='Running…';
+  try{
+    var py=await getPyodide();
+    var code=$i('lrnPysparkBox').value.replace(/\{table\}/g, ds().name);
+    py.globals.set('_tables_json', JSON.stringify(datasetsToJson()));
+    py.runPython(`
+import json, pandas as pd
+_raw = json.loads(_tables_json)
+_tables = {}
+for _name, _rows in _raw.items():
+    _pdf = pd.DataFrame(_rows)
+    for _c in _pdf.columns:
+        _pdf[_c] = pd.to_numeric(_pdf[_c], errors="ignore")
+    _tables[_name] = _pdf
+spark = _make_spark(_tables)
+`);
+    var captured = py.runPython(`
+import sys, io
+_buf = io.StringIO()
+_old = sys.stdout
+sys.stdout = _buf
+try:
+    exec(${JSON.stringify(code)})
+finally:
+    sys.stdout = _old
+_buf.getvalue()
+`);
+    out.textContent = captured || '(no output — call .show() or print() to see results)';
+  }catch(e){
+    var _msg=e.message||String(e); var _hint=explainError(_msg); out.textContent = 'Error: ' + _msg + (_hint?'\n\n'+_hint:'');
+  }
+}
+
 /* --- Language modes --- */
 var currentLang='sql';
 function setLang(lang,btn){
@@ -1454,7 +3218,13 @@ async function runQuery(){
     }
     addDataset('query_result',fields,rows);
     log('✓ Query: '+rows.length.toLocaleString()+' rows → new tab "'+ds().name+'"','ls')
-  }catch(e){alert('SQL error: '+(e.message||e));log('SQL error: '+(e.message||e),'le')}
+  }catch(e){
+    var msg=e.message||String(e);
+    var hint=explainError(msg);
+    alert('SQL error: '+msg+(hint?'\n\n'+hint:''));
+    log('SQL error: '+msg,'le');
+    if(hint)log('→ '+hint,'lq');
+  }
 }
 function transpileQuery(){
   var q=$i('sqlBox').value.trim();if(!q){alert('Write a SQL query first.');return}
@@ -1719,8 +3489,181 @@ var CMDS_HELP=[
   'Data:         dedupe | sample 1000 | keep <col> > 1000 | remove <col> = yes',
   'Navigation:   switch to <dataset> | tables | recipe'
 ].join('\n');
-function sendCmd(){var raw=$i('cmdIn').value.trim();if(!raw)return;$i('cmdIn').value='';log('› '+raw,'lu');parseCmd(raw)}
+function sendCmd(){
+  var raw=$i('cmdIn').value.trim();if(!raw)return;$i('cmdIn').value='';
+  if(aiModeOn&&aiEngine){ askLocalAi(raw); return; }
+  log('› '+raw,'lu');parseCmd(raw)
+}
 $i('cmdIn').addEventListener('keydown',function(e){if(e.key==='Enter')sendCmd()});
+/* ============================================================
+   FUZZY MATCHING — no API needed. Levenshtein distance for typo tolerance
+   + a synonym map so differently-worded requests route to the same intent.
+============================================================ */
+/* ============================================================
+   LOCAL AI MODE — optional, no API key, no server. Uses WebLLM to run a
+   small model (Llama-3.2-1B-Instruct, ~1GB, quantized) fully in-browser via
+   WebGPU. Opt-in only: nothing downloads until the user clicks "AI mode".
+   Quality is well below a real hosted LLM, but handles genuinely open-ended
+   questions that the rule-based parser/NL-to-SQL layer above can't.
+============================================================ */
+var aiEngine=null, aiLoading=false, aiModeOn=false;
+var AI_MODEL_ID='Llama-3.2-1B-Instruct-q4f16_1-MLC';
+async function toggleAiMode(){
+  var btn=$i('aiModeBtn'),sub=$i('dockSub');
+  if(aiModeOn){
+    aiModeOn=false;
+    btn.textContent='✨ AI mode';
+    sub.textContent='SQL · PySpark · Python · transforms · type "help"';
+    log('AI mode off — back to rule-based commands.','ls');
+    return;
+  }
+  if(!('gpu' in navigator)){
+    log('AI mode needs WebGPU, which this browser doesn\'t support — try a recent Chrome/Edge. Falling back to rule-based commands.','le');
+    return;
+  }
+  if(aiEngine){ aiModeOn=true; btn.textContent='✨ AI mode: ON'; sub.textContent='Local AI active — ask anything about your data'; log('AI mode on.','ls'); return; }
+  if(aiLoading)return;
+  aiLoading=true;
+  btn.textContent='⏳ Loading model…';
+  log('Loading a small local AI model (~1GB, one-time download, cached after) — this can take a minute…','lq');
+  try{
+    var webllm=await window._loadWebLLM();
+    aiEngine=await webllm.CreateMLCEngine(AI_MODEL_ID,{
+      initProgressCallback:function(p){ btn.textContent='⏳ '+Math.round((p.progress||0)*100)+'%'; }
+    });
+    aiModeOn=true;
+    btn.textContent='✨ AI mode: ON';
+    sub.textContent='Local AI active — ask anything about your data';
+    log('Local AI model ready. Ask anything — it can see your loaded datasets\' column names and types, but it\'s a small 1B model, so double-check anything it tells you rather than trusting it outright.','ls');
+  }catch(e){
+    btn.textContent='✨ AI mode';
+    log('Local AI failed to load: '+(e.message||e)+' — falling back to rule-based commands.','le');
+  }
+  aiLoading=false;
+}
+function datasetContextSummary(){
+  if(!S.datasets.length)return 'No datasets loaded.';
+  return S.datasets.map(function(d){
+    return d.name+' ('+d.rows.length+' rows): '+d.fields.map(function(f){
+      var c=d.profile&&d.profile.cols.find(function(c){return c.field===f;});
+      return f+(c?':'+c.type:'');
+    }).join(', ');
+  }).join('\n');
+}
+async function askLocalAi(question){
+  log('› '+question,'lu');
+  var thinking=document.createElement('p');thinking.className='';thinking.textContent='…thinking (local model, may take a few seconds)';
+  $i('cmdLog').appendChild(thinking);$i('cmdLog').scrollTop=$i('cmdLog').scrollHeight;
+  try{
+    var sys='You are a concise data-analysis assistant embedded in a browser data tool called SheetScrub. '+
+      'The user has these datasets loaded:\n'+datasetContextSummary()+'\n'+
+      'Answer briefly and plainly. If asked for a query, write real SQL using the exact table/column names above. '+
+      'You are a small local model — if unsure, say so rather than guessing confidently.';
+    var reply=await aiEngine.chat.completions.create({
+      messages:[{role:'system',content:sys},{role:'user',content:question}],
+      temperature:0.3, max_tokens:300
+    });
+    thinking.remove();
+    var text=reply.choices[0].message.content;
+    log(text,'ls');
+  }catch(e){
+    thinking.remove();
+    log('Local AI error: '+(e.message||e),'le');
+  }
+}
+
+function levenshtein(a,b){
+  a=a.toLowerCase();b=b.toLowerCase();
+  var m=a.length,n=b.length,dp=[];
+  for(var i=0;i<=m;i++){dp[i]=[i];}
+  for(var j=0;j<=n;j++){dp[0][j]=j;}
+  for(i=1;i<=m;i++)for(j=1;j<=n;j++){
+    dp[i][j]=a[i-1]===b[j-1]?dp[i-1][j-1]:1+Math.min(dp[i-1][j],dp[i][j-1],dp[i-1][j-1]);
+  }
+  return dp[m][n];
+}
+function fuzzyMatch(word,candidates,maxDist){
+  maxDist=maxDist===undefined?2:maxDist;
+  var best=null,bestDist=Infinity;
+  candidates.forEach(function(c){
+    var dist=levenshtein(word,c);
+    if(dist<bestDist){bestDist=dist;best=c;}
+  });
+  return bestDist<=maxDist?best:null;
+}
+// Synonym groups — a phrase mentioning any word in a group is treated as meaning that intent.
+var SYNONYMS={
+  top:['top','highest','largest','biggest','max','greatest'],
+  stats:['stats','statistics','summary','summarize','describe','overview'],
+  nulls:['nulls','null','missing','blank','empty'],
+  count:['count','countby','tally','frequency','breakdown'],
+  filter:['keep','filter','only','where'],
+  remove:['remove','delete','drop','exclude','filterout']
+};
+function containsAnySynonym(text,group){
+  var words=text.toLowerCase().split(/\s+/);
+  return SYNONYMS[group].some(function(syn){
+    return words.some(function(w){return w===syn||levenshtein(w,syn)<=1;});
+  });
+}
+
+/* ============================================================
+   ERROR EXPLAINER — matches common error substrings to a plain-English
+   cause + fix. No API needed; error types are a small, well-known set.
+============================================================ */
+var ERROR_PATTERNS=[
+  {re:/no such (table|column):?\s*(\S+)?/i, explain:function(m){return 'The '+m[1]+(m[2]?' "'+m[2]+'"':'')+' doesn\'t exist in this context — check spelling, or type "tables" to list what\'s loaded.';}},
+  {re:/syntax error/i, explain:function(){return 'SQL syntax issue — check for a missing comma, unmatched quote, or a keyword typo near where the error points.';}},
+  {re:/ambiguous column/i, explain:function(){return 'This column name exists in more than one joined table — prefix it with the table name or alias, e.g. "employees.salary".';}},
+  {re:/0 rows/i, explain:function(){return 'The query ran fine but matched nothing — the filter condition is probably too strict, or a value/spelling doesn\'t match what\'s actually in the data.';}},
+  {re:/Unknown operation/i, explain:function(){return 'That transform operation name isn\'t recognized — type "help" to see the supported command list.';}},
+  {re:/AttributeError.*has no attribute/i, explain:function(m){return 'That method isn\'t implemented in the PySpark shim yet (it\'s a small pandas-backed stand-in, not full PySpark). Rephrase using a supported method (filter/select/withColumn/groupBy/join/orderBy/limit/show), or ask to have the shim extended.';}},
+  {re:/KeyError/i, explain:function(){return 'A column name used in the code doesn\'t exist in this dataset — double check the exact column names (case-sensitive).';}},
+  {re:/is not defined|NameError/i, explain:function(){return 'A variable or function name isn\'t defined — likely a typo, or code that depends on a step that didn\'t run first.';}},
+];
+function explainError(msg){
+  for(var i=0;i<ERROR_PATTERNS.length;i++){
+    var m=msg.match(ERROR_PATTERNS[i].re);
+    if(m)return ERROR_PATTERNS[i].explain(m);
+  }
+  return null;
+}
+
+/* ============================================================
+   RULE-BASED NL → SQL — covers common phrasings without an LLM.
+   Not exhaustive; falls through to the existing pattern commands below
+   when it doesn't match, so nothing regresses.
+============================================================ */
+function tryNlToSql(s,tblName){
+  var low=s.toLowerCase().trim();
+  var m;
+  // "average X by Y" / "avg X per Y"
+  if((m=low.match(/^(?:average|avg|mean)\s+(.+?)\s+(?:by|per)\s+(.+)$/i))){
+    var col=findField(m[1].trim()),grp=findField(m[2].trim());
+    if(col&&grp)return 'SELECT '+grp+', ROUND(AVG('+col+'),2) AS avg_'+col+' FROM '+tblName+' GROUP BY '+grp+' ORDER BY avg_'+col+' DESC';
+  }
+  // "top N by X" / "highest N X"
+  if((m=low.match(/^(?:top|highest|largest)\s+(\d+)\s+(?:by\s+)?(.+)$/i))){
+    var n=m[1],col2=findField(m[2].trim());
+    if(col2)return 'SELECT * FROM '+tblName+' ORDER BY '+col2+' DESC LIMIT '+n;
+  }
+  // "X where Y greater than N" / "X where Y > N"
+  if((m=low.match(/^(.+?)\s+where\s+(.+?)\s+(?:greater than|more than|above|>)\s+(\d+(?:\.\d+)?)$/i))){
+    var col3=findField(m[2].trim());
+    if(col3)return 'SELECT * FROM '+tblName+' WHERE '+col3+' > '+m[3];
+  }
+  if((m=low.match(/^(.+?)\s+where\s+(.+?)\s+(?:less than|below|under|<)\s+(\d+(?:\.\d+)?)$/i))){
+    var col4=findField(m[2].trim());
+    if(col4)return 'SELECT * FROM '+tblName+' WHERE '+col4+' < '+m[3];
+  }
+  // "sum of X by Y"
+  if((m=low.match(/^(?:sum|total)\s+(?:of\s+)?(.+?)\s+(?:by|per)\s+(.+)$/i))){
+    var col5=findField(m[1].trim()),grp2=findField(m[2].trim());
+    if(col5&&grp2)return 'SELECT '+grp2+', SUM('+col5+') AS total_'+col5+' FROM '+tblName+' GROUP BY '+grp2+' ORDER BY total_'+col5+' DESC';
+  }
+  return null;
+}
+
 function parseCmd(s){
   if(!S.datasets.length){log('Load a dataset first.','le');return}
   var d=ds(),m,f;
@@ -1756,8 +3699,25 @@ function parseCmd(s){
       runSqlStatement(s).then(function(msg){log(msg,'ls')}).catch(function(e){log('SQL: '+(e.message||e),'le')})
       return
     }
+    // Rule-based NL → SQL (covers common phrasings the exact-pattern commands above miss)
+    var nlSql=tryNlToSql(s,d.name);
+    if(nlSql){$i('sqlBox').value=nlSql;navigate('query',document.querySelector('[data-page="query"]'));log('Query ready in the SQL panel — hit Run.','lq');return}
+    // Fuzzy fallback: typo/synonym-tolerant retry of the most common intents before giving up
+    if(containsAnySynonym(s,'top')){
+      var topM=s.match(/(\d+)/),topCol=s.replace(/\d+/g,'').trim().split(/\s+/).pop();
+      var fCol=topCol?findField(topCol):null;
+      if(fCol){var n2=topM?topM[1]:10;var sql2='SELECT '+fCol+', COUNT(*) AS cnt FROM '+d.name+' GROUP BY '+fCol+' ORDER BY cnt DESC LIMIT '+n2;$i('sqlBox').value=sql2;navigate('query',document.querySelector('[data-page="query"]'));log('Interpreted as a "top" query (fuzzy match) — hit Run.','lq');return}
+    }
+    if(containsAnySynonym(s,'stats')){
+      var lastWord=s.trim().split(/\s+/).pop();var fCol2=findField(lastWord);
+      if(fCol2){var sql3='SELECT MIN('+fCol2+') AS min_val, MAX('+fCol2+') AS max_val, ROUND(AVG('+fCol2+'),2) AS avg_val FROM '+d.name;$i('sqlBox').value=sql3;navigate('query',document.querySelector('[data-page="query"]'));log('Interpreted as a "stats" query (fuzzy match) — hit Run.','lq');return}
+    }
     throw new Error('Didn\'t understand that. Type "help" for all commands.')
-  }catch(e){log(e.message||String(e),'le')}
+  }catch(e){
+    var explained=explainError(e.message||String(e));
+    log(e.message||String(e),'le');
+    if(explained)log('→ '+explained,'lq');
+  }
 }
 function findField(name){var d=ds(),n=name.toLowerCase();var ex=d.fields.find(function(f){return f.toLowerCase()===n});if(ex)return ex;var st=d.fields.filter(function(f){return f.toLowerCase().indexOf(n)===0});if(st.length===1)return st[0];var ct=d.fields.filter(function(f){return f.toLowerCase().indexOf(n)!==-1});if(ct.length===1)return ct[0];return null}
 function suggestQueries(colHint){
@@ -2072,7 +4032,6 @@ ncModeChange();
       var name = data.username || (raw ? JSON.parse(raw).name : 'User');
       loginAs({name: name, email: '', guest: false}, true);
     }
-    // else: leave the login page showing (its default state)
   }).catch(function(){ /* server unreachable — show login, fail closed */ });
 })();
 </script>
