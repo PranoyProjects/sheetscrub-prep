@@ -702,13 +702,30 @@ ORDER BY department_id, dept_rank;</textarea>
                 <tr><td><b>Clustered</b></td><td>Physically sorts table rows on disk by the index key — one per table</td><td>Range queries, primary key lookups</td></tr>
                 <tr><td><b>Non-clustered</b></td><td>Separate structure pointing back to rows — many per table</td><td>Frequent lookups on non-PK columns</td></tr>
                 <tr><td><b>Covering</b></td><td>Includes all columns a query needs, so the engine never touches the base table</td><td>Hot read-path queries — biggest single perf win</td></tr>
+                <tr><td><b>Bitmap</b></td><td>One bit-vector per distinct value, ANDed/ORed together to answer multi-column filters — very compact for LOW-cardinality columns</td><td>Data warehouse fact tables filtering on dimension keys/flags (region, status, category) — the opposite cardinality profile from a B-tree index</td></tr>
               </tbody>
             </table>
             <p style="font-size:13px;color:var(--ink3);line-height:1.6">
-              <b>Cardinality</b> matters: index high-cardinality columns (unique-ish values) — indexing a boolean or a 3-value status column rarely helps, since the engine still has to scan most of the table.<br>
+              <b>Cardinality</b> matters: B-tree indexes (clustered/non-clustered/covering) work best on high-cardinality columns (unique-ish values) — indexing a boolean or a 3-value status column with a B-tree rarely helps, since the engine still has to scan most of the table. Bitmap indexes flip this: they're specifically for LOW-cardinality columns, since a compact bit-vector per distinct value only stays compact when there aren't many distinct values.<br>
               <b>Sargability</b>: a predicate is "sargable" if the engine can use an index on it directly. Wrapping an indexed column in a function — <code>WHERE YEAR(order_date) = 2025</code> — makes it non-sargable; the engine must evaluate the function per row instead. Rewrite as a sargable range: <code>WHERE order_date >= '2025-01-01' AND order_date &lt; '2026-01-01'</code>.<br>
               <b>Lakehouse note</b>: Delta Lake / Databricks doesn't use traditional B-tree indexes — instead: <b>Z-ordering</b> co-locates related data on disk (multi-dimensional clustering), <b>data skipping</b> uses file-level min/max statistics to skip whole files, and <b>Bloom filters</b> can be added on specific columns for fast existence checks. Same goal (avoid scanning irrelevant data), different mechanism.
             </p>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head" onclick="toggleCard('lrnSqlAcidCard')"><h3>ACID properties</h3><span class="toggle"></span></div>
+          <div class="card-body">
+            <table class="lrn-table" style="font-size:12.5px;width:100%">
+              <thead><tr><th>Property</th><th>Guarantee</th></tr></thead>
+              <tbody>
+                <tr><td><b>Atomicity</b></td><td>A transaction's operations all succeed or all fail together — no partial writes left behind</td></tr>
+                <tr><td><b>Consistency</b></td><td>A transaction moves the database from one valid state to another, never violating constraints/rules mid-way</td></tr>
+                <tr><td><b>Isolation</b></td><td>Concurrent transactions don't see each other's uncommitted changes — how strictly is set by isolation level (Read Committed, Serializable, etc.)</td></tr>
+                <tr><td><b>Durability</b></td><td>Once committed, a change survives a crash — it's written to durable storage, not just memory</td></tr>
+              </tbody>
+            </table>
+            <p style="font-size:13px;color:var(--ink3);line-height:1.6;margin-top:10px">In the lakehouse world, Delta Lake brings these same guarantees to files on cloud storage via its <code>_delta_log</code> transaction log — atomicity and durability come from that log recording each committed version; isolation is handled via optimistic concurrency control (see the Databricks track's MERGE-conflict question). Plain files on S3/ADLS with no transaction layer have none of these guarantees, which is the core problem Delta Lake was built to solve.</p>
           </div>
         </div>
 
@@ -1024,6 +1041,12 @@ result.show()</textarea>
             <p style="font-size:13px;color:var(--ink3);line-height:1.7;margin-top:10px">
               <b>Narrow</b> transformation: each output partition depends on one input partition (filter, select — no shuffle).<br>
               <b>Wide</b> transformation: output depends on multiple input partitions (groupBy, join — requires a shuffle, a stage boundary).
+            </p>
+            <p style="font-size:13px;color:var(--ink3);line-height:1.7;margin-top:10px">
+              <b>Checkpointing</b> — saves a DataFrame/RDD's data to reliable distributed storage (HDFS/S3/DBFS) and, crucially, TRUNCATES its lineage. Without it, a long transformation chain has to be fully recomputed from the original source on any failure or re-access; checkpointing breaks that chain so recovery starts from the checkpoint, not from scratch. Different from <code>.cache()</code>/<code>.persist()</code>, which keep data in memory/disk for reuse but don't touch lineage — a cached DataFrame still has to be recomputed from source if the cache is evicted.
+            </p>
+            <p style="font-size:13px;color:var(--ink3);line-height:1.7;margin-top:10px">
+              <b>.head() vs .take(n)</b> — both are actions (trigger execution). <code>.head()</code> returns a single Row (or a list if given a count), typically used for a quick peek. <code>.take(n)</code> returns a list of the first n rows and is the more common/efficient choice for pulling a small preview from a distributed dataset, since it stops as soon as enough partitions have produced n rows rather than necessarily touching every partition.
             </p>
           </div>
         </div>
@@ -4354,7 +4377,9 @@ PRACTICE_CARD_BANKS.sql = [
   {priority:32, prompt:'Interview question: "Walk me through how a recursive CTE actually executes, step by step."', answer:'The anchor member runs once, producing the starting rows. Then the recursive member repeatedly runs against the PREVIOUS iteration\'s output, unioning new rows in, until a run produces zero new rows and it stops. I\'d always double check there\'s a genuine termination condition — an unbounded recursive CTE against cyclic data can loop forever.'},
   {priority:33, prompt:'Interview question: "Explain ROWS BETWEEN vs the default window frame."', answer:'Without an explicit frame, ORDER BY inside OVER() defaults to RANGE UNBOUNDED PRECEDING — everything from the start through the current row (or ties). ROWS BETWEEN lets me define an explicit physical window — like 1 row before through 1 row after for a centered moving average — which RANGE\'s default can\'t express.'},
   {priority:34, prompt:'Interview question: "Why doesn\'t SQLite (or most databases) have a native PIVOT keyword, and how do you work around it?"', answer:'Some databases do have PIVOT (SQL Server, Snowflake) but plenty don\'t. The portable workaround is conditional aggregation — SUM(CASE WHEN condition THEN 1 ELSE 0 END) for each column you want to pivot into. It\'s more verbose but works everywhere and doesn\'t depend on vendor-specific syntax.'},
-  {priority:35, prompt:'Interview question: "What does QUALIFY do, and why doesn\'t every database support it?"', answer:'QUALIFY filters on a window function result directly, without needing to wrap the query in a subquery — e.g. QUALIFY ROW_NUMBER() OVER (...) = 1. It\'s supported in Snowflake, BigQuery, and Databricks SQL, but NOT in standard SQL or SQLite — where it\'s missing, the portable equivalent is wrapping the windowed query in a subquery and filtering in the outer WHERE clause.'}
+  {priority:35, prompt:'Interview question: "What does QUALIFY do, and why doesn\'t every database support it?"', answer:'QUALIFY filters on a window function result directly, without needing to wrap the query in a subquery — e.g. QUALIFY ROW_NUMBER() OVER (...) = 1. It\'s supported in Snowflake, BigQuery, and Databricks SQL, but NOT in standard SQL or SQLite — where it\'s missing, the portable equivalent is wrapping the windowed query in a subquery and filtering in the outer WHERE clause.'},
+  {priority:36, prompt:'Interview question: "Walk me through ACID properties like you\'re explaining them to a junior engineer who just asked why a transaction failed halfway through and left weird data behind."', answer:'That shouldn\'t happen if the database is respecting Atomicity — a transaction is all-or-nothing, so a failure partway through should roll back everything, not leave a partial write. I\'d check whether the failing operation was actually inside a single transaction boundary, or whether it was accidentally split into multiple separate commits that could each succeed or fail independently.'},
+  {priority:37, prompt:'Interview question: "When would you reach for a bitmap index instead of a normal B-tree index?"', answer:'When the column has LOW cardinality — a handful of distinct values, like region or status — which is the opposite of when a B-tree index helps. Bitmap indexes are especially strong in data warehouse fact tables where you\'re combining multiple low-cardinality filters (region AND status AND category), since the engine can just AND/OR the bit-vectors together very cheaply.'}
 ];
 
 PRACTICE_CARD_BANKS.pyspark = [
@@ -4374,7 +4399,9 @@ PRACTICE_CARD_BANKS.pyspark = [
   {priority:14, prompt:'Interview question: "Explain how you\'d filter a DataFrame on a compound condition, and any gotchas."', answer:'Combine conditions in a single filter string with and/or, e.g. filter("department_id == 30 and salary > 4500"). The gotcha is syntax — SQL-string filters use SQL keywords (AND/OR, single =), while a pandas-backed filter uses Python operators (and/or, ==) — mixing the two up produces confusing errors rather than wrong results, so I always check which dialect a given filter method expects.'},
   {priority:15, prompt:'Interview question: "How would you explain to a junior engineer why chaining five transformations in one line can make debugging harder?"', answer:'Because Spark is lazy, nothing runs until an action, so an error only surfaces at the end — and a long chain hides which specific step actually failed. I\'d suggest breaking a chain into named intermediate variables during development, then optionally collapsing it back once it\'s working, purely for debuggability.'},
   {priority:16, prompt:'Interview question: "What would you tell someone who\'s surprised their join produced more rows than either input table?"', answer:'That\'s the classic join fan-out — if the join key has duplicates on either side, matching rows multiply out (m duplicates times n duplicates for that key). I\'d have them check for duplicate keys on both sides before trusting the join\'s row count at all.'},
-  {priority:17, prompt:'Interview question: "How do you decide between .agg({"col":"func"}) dict syntax and F.sum()/F.avg() style aggregation?"', answer:'The dict syntax is quick for single-column, single-function aggregations. F.sum()/F.avg() (real PySpark, not this shim) is more flexible — multiple aggregations on the same column, custom aliasing, combining with other column expressions in the same .agg() call. I\'d reach for the dict form for quick exploratory work and the functional form for anything going into production code.'}
+  {priority:17, prompt:'Interview question: "How do you decide between .agg({"col":"func"}) dict syntax and F.sum()/F.avg() style aggregation?"', answer:'The dict syntax is quick for single-column, single-function aggregations. F.sum()/F.avg() (real PySpark, not this shim) is more flexible — multiple aggregations on the same column, custom aliasing, combining with other column expressions in the same .agg() call. I\'d reach for the dict form for quick exploratory work and the functional form for anything going into production code.'},
+  {priority:18, prompt:'Interview question: "Explain checkpointing to someone who thinks it\'s the same thing as caching."', answer:'Caching keeps data in memory/disk for reuse but doesn\'t touch lineage — if the cache gets evicted, Spark still has to recompute from the original source using the full transformation chain. Checkpointing writes data to reliable distributed storage AND truncates the lineage at that point, so recovery after a failure starts from the checkpoint, not from scratch. I\'d reach for checkpointing on long iterative chains (like graph algorithms) where lineage itself becomes the bottleneck, not just the data size.'},
+  {priority:19, prompt:'Interview question: "When would you use .take(n) instead of .collect()?"', answer:'.take(n) only pulls n rows and can stop early once enough partitions have produced them — much cheaper than .collect(), which forces every partition to be read and pulled to the driver. I\'d use .take() for a quick preview or sanity check, and reserve .collect() for when I genuinely need the entire result set locally, being aware of the memory risk that comes with it.'}
 ];
 
 PRACTICE_CARD_BANKS.python = [
